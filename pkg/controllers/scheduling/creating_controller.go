@@ -1,4 +1,4 @@
-package placementdecision
+package scheduling
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	cache "k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
@@ -75,6 +76,7 @@ func (c *placementDecisionCreatingController) sync(ctx context.Context, syncCtx 
 	namespace, name, err := cache.SplitMetaNamespaceKey(queueKey)
 	if err != nil {
 		// ignore placement whose key is not in format: namespace/name
+		utilruntime.HandleError(err)
 		return nil
 	}
 
@@ -93,13 +95,7 @@ func (c *placementDecisionCreatingController) sync(ctx context.Context, syncCtx 
 		return nil
 	}
 
-	// query placementdecisions with label selector
-	requirement, err := labels.NewRequirement(placementLabel, selection.Equals, []string{placement.Name})
-	if err != nil {
-		return err
-	}
-	labelSelector := labels.NewSelector().Add(*requirement)
-	placementDecisions, err := c.placementDecisionLister.PlacementDecisions(namespace).List(labelSelector)
+	placementDecisions, err := getPlacementDecisions(placement.Namespace, placement.Name, c.placementDecisionLister)
 	if err != nil {
 		return err
 	}
@@ -129,4 +125,15 @@ func (c *placementDecisionCreatingController) createPlacementDecision(ctx contex
 
 	_, err := c.clusterClient.ClusterV1alpha1().PlacementDecisions(placement.Namespace).Create(ctx, placementDecision, metav1.CreateOptions{})
 	return err
+}
+
+// getPlacementDecisions returns placementdecisions belongs to a certain placement
+func getPlacementDecisions(placementNamespace, placementName string, lister clusterlisterv1alpha1.PlacementDecisionLister) ([]*clusterapiv1alpha1.PlacementDecision, error) {
+	// query with label selector
+	requirement, err := labels.NewRequirement(placementLabel, selection.Equals, []string{placementName})
+	if err != nil {
+		return nil, err
+	}
+	labelSelector := labels.NewSelector().Add(*requirement)
+	return lister.PlacementDecisions(placementNamespace).List(labelSelector)
 }

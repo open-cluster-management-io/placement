@@ -8,7 +8,8 @@ import (
 )
 
 const (
-	placementLabel = "cluster.open-cluster-management.io/placement"
+	clusterSetLabel = "cluster.open-cluster-management.io/clusterset"
+	placementLabel  = "cluster.open-cluster-management.io/placement"
 )
 
 type placementBuilder struct {
@@ -31,9 +32,40 @@ func (b *placementBuilder) WithUID(uid string) *placementBuilder {
 	return b
 }
 
+func (b *placementBuilder) WithNOC(noc int32) *placementBuilder {
+	b.placement.Spec.NumberOfClusters = &noc
+	return b
+}
+
+func (b *placementBuilder) WithClusterSets(clusterSets []string) *placementBuilder {
+	b.placement.Spec.ClusterSets = clusterSets
+	return b
+}
+
 func (b *placementBuilder) WithDeletionTimestamp() *placementBuilder {
 	now := metav1.Now()
 	b.placement.DeletionTimestamp = &now
+	return b
+}
+
+func (b *placementBuilder) AddPredicate(labelSelector *metav1.LabelSelector, claimSelector *clusterapiv1alpha1.ClusterClaimSelector) *placementBuilder {
+	predicate := clusterapiv1alpha1.ClusterPredicate{
+		RequiredClusterSelector: clusterapiv1alpha1.ClusterSelector{},
+	}
+
+	if labelSelector != nil {
+		predicate.RequiredClusterSelector.LabelSelector = *labelSelector
+	}
+
+	if claimSelector != nil {
+		predicate.RequiredClusterSelector.ClaimSelector = *claimSelector
+	}
+
+	if b.placement.Spec.Predicates == nil {
+		b.placement.Spec.Predicates = []clusterapiv1alpha1.ClusterPredicate{}
+	}
+	b.placement.Spec.Predicates = append(b.placement.Spec.Predicates, predicate)
+
 	return b
 }
 
@@ -70,6 +102,11 @@ func (b *placementDecisionBuilder) WithPlacementLabel(placementName string) *pla
 		b.placementDecision.Labels = map[string]string{}
 	}
 	b.placementDecision.Labels[placementLabel] = placementName
+	return b
+}
+
+func (b *placementDecisionBuilder) WithDecisions(decisions []clusterapiv1alpha1.ClusterDecision) *placementDecisionBuilder {
+	b.placementDecision.Status.Decisions = decisions
 	return b
 }
 
