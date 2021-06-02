@@ -2,12 +2,14 @@ package scheduling
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/openshift/library-go/pkg/controller/factory"
 	"github.com/openshift/library-go/pkg/operator/events"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -149,7 +151,7 @@ func (c *schedulingController) sync(ctx context.Context, syncCtx factory.SyncCon
 
 	klog.V(4).Infof("Reconciling placement %q", queueKey)
 	placement, err := c.placementLister.Placements(namespace).Get(name)
-	if errors.IsNotFound(err) {
+	if k8serrors.IsNotFound(err) {
 		// no work if placement is deleted
 		return nil
 	}
@@ -163,9 +165,14 @@ func (c *schedulingController) sync(ctx context.Context, syncCtx factory.SyncCon
 	}
 
 	// get available clusters for this placement
+	bindingsFound := true
 	clusters, err := c.getAvailableClusters(placement)
 	if err != nil {
-		return err
+		if strings.Contains(err.Error(), "No ManagedClusterSetBindings") {
+			bindingsFound = false
+		} else {
+			return err
+		}
 	}
 
 	// schedule placement with scheduler
@@ -174,8 +181,8 @@ func (c *schedulingController) sync(ctx context.Context, syncCtx factory.SyncCon
 		return err
 	}
 
-	// update placement status if necessary
-	if clusters == nil {
+	// update placement status if necessary to signal no bindings
+	if !bindingsFound {
 		scheduleResult.unscheduled = -1
 	}
 	return c.updateStatus(ctx, placement, scheduleResult.scheduled, scheduleResult.unscheduled)
@@ -191,7 +198,7 @@ func (c *schedulingController) getAvailableClusters(placement *clusterapiv1alpha
 		return nil, err
 	}
 	if len(bindings) == 0 {
-		return nil, nil
+		return nil, errors.New("No ManagedClusterSetBindings available")
 	}
 
 	// filter out invaid clustersetbindings
@@ -199,7 +206,7 @@ func (c *schedulingController) getAvailableClusters(placement *clusterapiv1alpha
 	for _, binding := range bindings {
 		// ignore clusterset does not exist
 		_, err := c.clusterSetLister.Get(binding.Name)
-		if errors.IsNotFound(err) {
+		if k8serrors.IsNotFound(err) {
 			continue
 		}
 		if err != nil {

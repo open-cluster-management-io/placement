@@ -60,6 +60,11 @@ func TestSchedulingController_sync(t *testing.T) {
 		{
 			name:      "placement unsatisfied",
 			placement: testinghelpers.NewPlacement(placementNamespace, placementName).Build(),
+			initObjs: []runtime.Object{
+				testinghelpers.NewClusterSet("clusterset1"),
+				testinghelpers.NewClusterSetBinding(placementNamespace, "clusterset1"),
+				testinghelpers.NewManagedCluster("cluster1").WithLabel(clusterSetLabel, "clusterset1").Build(),
+			},
 			scheduleResult: &scheduleResult{
 				scheduled:   3,
 				unscheduled: 1,
