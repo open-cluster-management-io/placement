@@ -35,6 +35,13 @@ const (
 	schedulingControllerName = "SchedulingController"
 )
 
+var noBindingCondition = metav1.Condition{
+	Type:    clusterapiv1alpha1.PlacementConditionSatisfied,
+	Status:  metav1.ConditionFalse,
+	Reason:  "NoManagedClusterSetBindings",
+	Message: "No ManagedClusterSetBindings found in placement namespace",
+}
+
 type enqueuePlacementFunc func(namespace, name string)
 
 // schedulingController schedules cluster decisions for Placements
@@ -182,10 +189,7 @@ func (c *schedulingController) sync(ctx context.Context, syncCtx factory.SyncCon
 	}
 
 	// update placement status if necessary to signal no bindings
-	if !bindingsFound {
-		scheduleResult.unscheduled = -1
-	}
-	return c.updateStatus(ctx, placement, scheduleResult.scheduled, scheduleResult.unscheduled)
+	return c.updateStatus(ctx, placement, bindingsFound, scheduleResult.scheduled, scheduleResult.unscheduled)
 }
 
 // getAvailableClusters returns available clusters for the given placement. The clusters must
@@ -236,10 +240,15 @@ func (c *schedulingController) getAvailableClusters(placement *clusterapiv1alpha
 }
 
 // updateStatus updates the status of the placement according to schedule result.
-func (c *schedulingController) updateStatus(ctx context.Context, placement *clusterapiv1alpha1.Placement, numOfScheduledDecisions, numOfUnscheduledDecisions int) error {
+func (c *schedulingController) updateStatus(ctx context.Context, placement *clusterapiv1alpha1.Placement, bindings bool, numOfScheduledDecisions, numOfUnscheduledDecisions int) error {
 	newPlacement := placement.DeepCopy()
 	newPlacement.Status.NumberOfSelectedClusters = int32(numOfScheduledDecisions)
 	satisfiedCondition := newSatisfiedCondition(numOfUnscheduledDecisions)
+
+	if !bindings {
+		satisfiedCondition = noBindingCondition
+	}
+
 	meta.SetStatusCondition(&newPlacement.Status.Conditions, satisfiedCondition)
 	if reflect.DeepEqual(newPlacement.Status, placement.Status) {
 		return nil
@@ -258,10 +267,6 @@ func newSatisfiedCondition(numOfUnscheduledDecisions int) metav1.Condition {
 		condition.Status = metav1.ConditionTrue
 		condition.Reason = "AllDecisionsScheduled"
 		condition.Message = "All cluster decisions scheduled"
-	case numOfUnscheduledDecisions == -1:
-		condition.Status = metav1.ConditionFalse
-		condition.Reason = "NoManagedClusterSetBindings"
-		condition.Message = "No ManagedClusterSetBindings found in placement namespace"
 	default:
 		condition.Status = metav1.ConditionFalse
 		condition.Reason = "NotAllDecisionsScheduled"

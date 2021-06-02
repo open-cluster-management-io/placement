@@ -95,7 +95,7 @@ func TestSchedulingController_sync(t *testing.T) {
 			placement: testinghelpers.NewPlacement(placementNamespace, placementName).Build(),
 			scheduleResult: &scheduleResult{
 				scheduled:   0,
-				unscheduled: -1,
+				unscheduled: 0,
 			},
 			validateActions: func(t *testing.T, actions []clienttesting.Action) {
 				// check if PlacementDecision has been updated
