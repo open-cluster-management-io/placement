@@ -175,6 +175,9 @@ func (c *schedulingController) sync(ctx context.Context, syncCtx factory.SyncCon
 	}
 
 	// update placement status if necessary
+	if clusters == nil {
+		scheduleResult.unscheduled = -1
+	}
 	return c.updateStatus(ctx, placement, scheduleResult.scheduled, scheduleResult.unscheduled)
 }
 
@@ -248,6 +251,10 @@ func newSatisfiedCondition(numOfUnscheduledDecisions int) metav1.Condition {
 		condition.Status = metav1.ConditionTrue
 		condition.Reason = "AllDecisionsScheduled"
 		condition.Message = "All cluster decisions scheduled"
+	case numOfUnscheduledDecisions == -1:
+		condition.Status = metav1.ConditionFalse
+		condition.Reason = "NoManagedClusterSetBindings"
+		condition.Message = "No ManagedClusterSetBindings found in placement namespace"
 	default:
 		condition.Status = metav1.ConditionFalse
 		condition.Reason = "NotAllDecisionsScheduled"
