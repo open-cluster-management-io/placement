@@ -228,7 +228,12 @@ func TestGetAvailableClusters(t *testing.T) {
 				clusterSetLister:        clusterInformerFactory.Cluster().V1alpha1().ManagedClusterSets().Lister(),
 				clusterSetBindingLister: clusterInformerFactory.Cluster().V1alpha1().ManagedClusterSetBindings().Lister(),
 			}
-			clusters, err := ctrl.getAvailableClusters(c.placement)
+			bindings, err := ctrl.getManagedClusterSetBindings(c.placement)
+			if err != nil {
+				t.Errorf("unexpected err: %v", err)
+			}
+
+			clusters, err := ctrl.getAvailableClusters(c.placement, bindings)
 			if err != nil {
 				t.Errorf("unexpected err: %v", err)
 			}

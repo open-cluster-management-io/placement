@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"strings"
 
 	"github.com/openshift/library-go/pkg/controller/factory"
 	"github.com/openshift/library-go/pkg/operator/events"
@@ -171,14 +170,14 @@ func (c *schedulingController) sync(ctx context.Context, syncCtx factory.SyncCon
 	}
 
 	// get available clusters for this placement
-	bindingsFound := true
-	clusters, err := c.getAvailableClusters(placement)
+	bindings, err := c.getManagedClusterSetBindings(placement)
 	if err != nil {
-		if strings.Contains(err.Error(), "No ManagedClusterSetBindings") {
-			bindingsFound = false
-		} else {
-			return err
-		}
+		return err
+	}
+
+	clusters, err := c.getAvailableClusters(placement, bindings)
+	if err != nil {
+		return err
 	}
 
 	// schedule placement with scheduler
@@ -188,21 +187,26 @@ func (c *schedulingController) sync(ctx context.Context, syncCtx factory.SyncCon
 	}
 
 	// update placement status if necessary to signal no bindings
-	return c.updateStatus(ctx, placement, bindingsFound, scheduleResult.scheduled, scheduleResult.unscheduled)
+	return c.updateStatus(ctx, placement, len(bindings) > 0, scheduleResult.scheduled, scheduleResult.unscheduled)
 }
 
-// getAvailableClusters returns available clusters for the given placement. The clusters must
-// 1) Be from clustersets bound to the placement namespace;
-// 2) Belong to one of particular clustersets if .spec.clusterSets is specified;
-func (c *schedulingController) getAvailableClusters(placement *clusterapiv1alpha1.Placement) ([]*clusterapiv1.ManagedCluster, error) {
+// getManagedClusterSetBindings returns all bindings found in the placement namespace.
+func (c *schedulingController) getManagedClusterSetBindings(placement *clusterapiv1alpha1.Placement) ([]*clusterapiv1alpha1.ManagedClusterSetBinding, error) {
 	// get all clusterset bindings under the placement namespace
 	bindings, err := c.clusterSetBindingLister.ManagedClusterSetBindings(placement.Namespace).List(labels.Everything())
 	if err != nil {
 		return nil, err
 	}
 	if len(bindings) == 0 {
-		return nil, fmt.Errorf("No ManagedClusterSetBindings available")
+		bindings = nil
 	}
+	return bindings, nil
+}
+
+// getAvailableClusters returns available clusters for the given placement. The clusters must
+// 1) Be from clustersets bound to the placement namespace;
+// 2) Belong to one of particular clustersets if .spec.clusterSets is specified;
+func (c *schedulingController) getAvailableClusters(placement *clusterapiv1alpha1.Placement, bindings []*clusterapiv1alpha1.ManagedClusterSetBinding) ([]*clusterapiv1.ManagedCluster, error) {
 
 	// filter out invaid clustersetbindings
 	clusterSetNames := sets.NewString()
