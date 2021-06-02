@@ -2,14 +2,13 @@ package scheduling
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"reflect"
 	"strings"
 
 	"github.com/openshift/library-go/pkg/controller/factory"
 	"github.com/openshift/library-go/pkg/operator/events"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -158,7 +157,7 @@ func (c *schedulingController) sync(ctx context.Context, syncCtx factory.SyncCon
 
 	klog.V(4).Infof("Reconciling placement %q", queueKey)
 	placement, err := c.placementLister.Placements(namespace).Get(name)
-	if k8serrors.IsNotFound(err) {
+	if errors.IsNotFound(err) {
 		// no work if placement is deleted
 		return nil
 	}
@@ -202,7 +201,7 @@ func (c *schedulingController) getAvailableClusters(placement *clusterapiv1alpha
 		return nil, err
 	}
 	if len(bindings) == 0 {
-		return nil, errors.New("No ManagedClusterSetBindings available")
+		return nil, fmt.Errorf("No ManagedClusterSetBindings available")
 	}
 
 	// filter out invaid clustersetbindings
@@ -210,7 +209,7 @@ func (c *schedulingController) getAvailableClusters(placement *clusterapiv1alpha
 	for _, binding := range bindings {
 		// ignore clusterset does not exist
 		_, err := c.clusterSetLister.Get(binding.Name)
-		if k8serrors.IsNotFound(err) {
+		if errors.IsNotFound(err) {
 			continue
 		}
 		if err != nil {
