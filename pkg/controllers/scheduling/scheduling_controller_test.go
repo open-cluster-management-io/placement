@@ -86,9 +86,42 @@ func TestSchedulingController_sync(t *testing.T) {
 			},
 		},
 		{
+			name:      "placement missing managedclustersetbindings",
+			placement: testinghelpers.NewPlacement(placementNamespace, placementName).Build(),
+			scheduleResult: &scheduleResult{
+				scheduled:   0,
+				unscheduled: -1,
+			},
+			validateActions: func(t *testing.T, actions []clienttesting.Action) {
+				// check if PlacementDecision has been updated
+				testinghelpers.AssertActions(t, actions, "update")
+				// check if Placement has been updated
+				actual := actions[0].(clienttesting.UpdateActionImpl).Object
+				placement, ok := actual.(*clusterapiv1alpha1.Placement)
+				if !ok {
+					t.Errorf("expected Placement was updated")
+				}
+
+				if placement.Status.NumberOfSelectedClusters != int32(0) {
+					t.Errorf("expecte %d cluster selected, but got %d", 0, placement.Status.NumberOfSelectedClusters)
+				}
+				testinghelpers.HasCondition(
+					placement.Status.Conditions,
+					clusterapiv1alpha1.PlacementConditionSatisfied,
+					"NoManagedClusterSetBindings",
+					metav1.ConditionFalse,
+				)
+			},
+		},
+		{
 			name: "placement status not changed",
 			placement: testinghelpers.NewPlacement(placementNamespace, placementName).
 				WithNumOfSelectedClusters(3).WithSatisfiedCondition(3, 0).Build(),
+			initObjs: []runtime.Object{
+				testinghelpers.NewClusterSet("clusterset1"),
+				testinghelpers.NewClusterSetBinding(placementNamespace, "clusterset1"),
+				testinghelpers.NewManagedCluster("cluster1").WithLabel(clusterSetLabel, "clusterset1").Build(),
+			},
 			scheduleResult: &scheduleResult{
 				scheduled:   3,
 				unscheduled: 0,
