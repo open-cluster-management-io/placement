@@ -10,10 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	clienttesting "k8s.io/client-go/testing"
 
-	clusterclient "github.com/open-cluster-management/api/client/cluster/clientset/versioned"
 	clusterfake "github.com/open-cluster-management/api/client/cluster/clientset/versioned/fake"
-	clusterlisterv1alpha1 "github.com/open-cluster-management/api/client/cluster/listers/cluster/v1alpha1"
-	clusterapiv1 "github.com/open-cluster-management/api/cluster/v1"
 	clusterapiv1alpha1 "github.com/open-cluster-management/api/cluster/v1alpha1"
 	testinghelpers "github.com/open-cluster-management/placement/pkg/helpers/testing"
 )
@@ -110,15 +107,7 @@ func TestSchedulingController_sync(t *testing.T) {
 				clusterSetBindingLister: clusterInformerFactory.Cluster().V1alpha1().ManagedClusterSetBindings().Lister(),
 				placementLister:         clusterInformerFactory.Cluster().V1alpha1().Placements().Lister(),
 				placementDecisionLister: clusterInformerFactory.Cluster().V1alpha1().PlacementDecisions().Lister(),
-				scheduleFunc: func(
-					ctx context.Context,
-					placement *clusterapiv1alpha1.Placement,
-					clusters []*clusterapiv1.ManagedCluster,
-					clusterClient clusterclient.Interface,
-					placementDecisionLister clusterlisterv1alpha1.PlacementDecisionLister,
-				) (*scheduleResult, error) {
-					return c.scheduleResult, nil
-				},
+				scheduler:               &predicateScheduler{},
 			}
 
 			sysCtx := testinghelpers.NewFakeSyncContext(t, c.placement.Namespace+"/"+c.placement.Name)

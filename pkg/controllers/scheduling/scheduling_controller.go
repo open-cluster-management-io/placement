@@ -25,6 +25,7 @@ import (
 	clusterlisterv1alpha1 "github.com/open-cluster-management/api/client/cluster/listers/cluster/v1alpha1"
 	clusterapiv1 "github.com/open-cluster-management/api/cluster/v1"
 	clusterapiv1alpha1 "github.com/open-cluster-management/api/cluster/v1alpha1"
+	"github.com/open-cluster-management/placement/pkg/controllers/scheduling/plugins"
 )
 
 const (
@@ -44,7 +45,7 @@ type schedulingController struct {
 	placementLister         clusterlisterv1alpha1.PlacementLister
 	placementDecisionLister clusterlisterv1alpha1.PlacementDecisionLister
 	enqueuePlacementFunc    enqueuePlacementFunc
-	scheduleFunc            scheduleFunc
+	scheduler               scheduler
 }
 
 // NewDecisionSchedulingController return an instance of schedulingController
@@ -62,6 +63,7 @@ func NewSchedulingController(
 		syncCtx.Queue().Add(fmt.Sprintf("%s/%s", namespace, name))
 	}
 
+	scheduler := plugins.NewScheduler(placementDecisionInformer.Lister())
 	// build controller
 	c := schedulingController{
 		clusterClient:           clusterClient,
@@ -70,7 +72,7 @@ func NewSchedulingController(
 		clusterSetBindingLister: clusterSetBindingInformer.Lister(),
 		placementLister:         placementInformer.Lister(),
 		placementDecisionLister: placementDecisionInformer.Lister(),
-		scheduleFunc:            schedule,
+		scheduler:               &pluginScheduler{scheduler: scheduler},
 		enqueuePlacementFunc:    enqueuePlacementFunc,
 	}
 
@@ -169,7 +171,7 @@ func (c *schedulingController) sync(ctx context.Context, syncCtx factory.SyncCon
 	}
 
 	// schedule placement with scheduler
-	scheduleResult, err := c.scheduleFunc(ctx, placement, clusters, c.clusterClient, c.placementDecisionLister)
+	scheduleResult, err := c.scheduler.schedule(ctx, placement, clusters, c.clusterClient, c.placementDecisionLister)
 	if err != nil {
 		return err
 	}

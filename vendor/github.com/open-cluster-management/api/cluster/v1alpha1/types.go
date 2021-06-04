@@ -230,6 +230,13 @@ type PlacementSpec struct {
 	// Predicates represent a slice of predicates to select ManagedClusters. The predicates are ORed.
 	// +optional
 	Predicates []ClusterPredicate `json:"predicates,omitempty"`
+
+	// Affinity defines the affinity of the placement decision with cluster.
+	Affinity Affinity `json:"affinity,omitempty"`
+
+	// SpreadPolicy defines how placement decisions should be spreaded among the clusters in the scope
+	// of clustersets and predicates.
+	SpreadPolicy SpreadPolicy `json:"spreadPolicy,omitempty"`
 }
 
 // ClusterPredicate represents a predicate to select ManagedClusters.
@@ -242,6 +249,67 @@ type ClusterPredicate struct {
 	//    be selected or at least has a chance to be selected (when NumberOfClusters is specified);
 	// +optional
 	RequiredClusterSelector ClusterSelector `json:"requiredClusterSelector,omitempty"`
+}
+
+// Affinity defines the soft constraint on how cluster should be p
+type Affinity struct {
+	// ClusterAffinity defines that placement decisions are preferred to be put in
+	// the certain set of clusters. Each ClusterAffinity has a weight and the cluster
+	// with the maximum sum weight is selected at first.
+	ClusterAffinity []ClusterAffinityTerm `json:"clusterAffinity,omitempty"`
+
+	// ClusterAntiAffinity defines that placement decisions are not preferred to be
+	// put in the certain set of clusters. Each ClusterAntiAffinity has a weight and the
+	// cluster with the maximum sum weight is selected at last.
+	ClusterAntiAffinity []ClusterAffinityTerm `json:"clusterAntiAffinity,omitempty"`
+}
+
+// SpreadPolicy defines how placement decisions should be spreaded among the
+// clusters in the scope of clustersets and predicates.
+type SpreadPolicy struct {
+	// SpreadConstraints defines how placement decision should be distributed among a
+	// set of clusters.
+	SpreadConstraints []SpreadConstraintsTerm `json:"spreadConstraints,omitempty"`
+}
+
+// ClusterAffinityTerm defines an affinity terminology
+type ClusterAffinityTerm struct {
+	// Weight defines the importance of this affinity terminology
+	// +required
+	Weight int32 `json:"weight"`
+
+	ClusterSelector `json:",inline"`
+
+	// WhenUnsatisfiable represents when clusterSelector cannot be met, what action
+	// should be taken to a cluster:
+	// DoNotSelect tells the placement controller not to select the cluster.
+	// It's a hard constraint.
+	// SelectAnyway tells the placement controller to still select it while prioritizing
+	// clusters. It's a soft constraint.
+	WhenUnsatisfiable string `json:"whenUnsatisfiable"`
+}
+
+// SpreadConstraintsTerm defines a terminology to spread placement decisions
+type SpreadConstraintsTerm struct {
+	// MaxSkew is the maximum degree of which the placement decision can be
+	// evenly distributed
+	MaxSkew int32 `json:"maxSkew"`
+
+	// TopologyKey is either a label key or a cluster claim name of ManagedClusters
+	// +required
+	TopologyKey string `json:"topologyKey"`
+
+	// TopologyKeyType indicates the type of TopologyKey. It could be Label or Claim.
+	// +required
+	TopologyKeyType string `json:"topologyKeyType"`
+
+	// WhenUnsatisfiable represents when maxSkew cannot be met, what action
+	// should be taken to a cluster:
+	// DoNotSelect tells the placement controller not to select the cluster.
+	// It's a hard constraint.
+	// SelectAnyway tells the placement controller to still select it while prioritizing
+	// clusters. It's a soft constraint.
+	WhenUnsatisfiable string `json:"whenUnsatisfiable"`
 }
 
 // ClusterSelector represents the AND of the containing selectors. An empty cluster selector matches all objects.

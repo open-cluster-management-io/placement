@@ -150,7 +150,8 @@ func TestSchedule(t *testing.T) {
 			c.initObjs = append(c.initObjs, c.placement)
 			clusterClient := clusterfake.NewSimpleClientset(c.initObjs...)
 			clusterInformerFactory := testinghelpers.NewClusterInformerFactory(clusterClient, c.initObjs...)
-			result, err := schedule(
+			scheduler := &predicateScheduler{}
+			result, err := scheduler.schedule(
 				context.TODO(),
 				c.placement,
 				c.clusters,

@@ -19,3 +19,5 @@ require (
 	k8s.io/klog/v2 v2.8.0
 	sigs.k8s.io/controller-runtime v0.8.3
 )
+
+replace github.com/open-cluster-management/api => github.com/qiujian16/api v0.0.0-20210602055717-233a06fa5ccf

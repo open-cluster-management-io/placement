@@ -55,6 +55,25 @@ func (b *placementBuilder) AddPredicate(labelSelector *metav1.LabelSelector, cla
 	return b
 }
 
+func (b *placementBuilder) AddAffinity(labelSelector *metav1.LabelSelector, claimSelector *clusterapiv1alpha1.ClusterClaimSelector, weight int32) *placementBuilder {
+	if b.placement.Spec.Affinity.ClusterAffinity == nil {
+		b.placement.Spec.Affinity.ClusterAffinity = []clusterapiv1alpha1.ClusterAffinityTerm{}
+	}
+	b.placement.Spec.Affinity.ClusterAffinity = append(b.placement.Spec.Affinity.ClusterAffinity, NewAffinity(
+		labelSelector, claimSelector, weight,
+	))
+	return b
+}
+
+func (b *placementBuilder) AddSpread(mode, key string, maxSkew int32) *placementBuilder {
+	if b.placement.Spec.SpreadPolicy.SpreadConstraints == nil {
+		b.placement.Spec.SpreadPolicy.SpreadConstraints = []clusterapiv1alpha1.SpreadConstraintsTerm{}
+	}
+	b.placement.Spec.SpreadPolicy.SpreadConstraints = append(b.placement.Spec.SpreadPolicy.SpreadConstraints, NewSpread(
+		mode, key, maxSkew))
+	return b
+}
+
 func (b *placementBuilder) WithNumOfSelectedClusters(nosc int) *placementBuilder {
 	b.placement.Status.NumberOfSelectedClusters = int32(nosc)
 	return b
@@ -96,6 +115,32 @@ func NewClusterPredicate(labelSelector *metav1.LabelSelector, claimSelector *clu
 	}
 
 	return predicate
+}
+
+func NewAffinity(labelSelector *metav1.LabelSelector, claimSelector *clusterapiv1alpha1.ClusterClaimSelector, weight int32) clusterapiv1alpha1.ClusterAffinityTerm {
+	affinity := clusterapiv1alpha1.ClusterAffinityTerm{}
+	if labelSelector != nil {
+		affinity.LabelSelector = *labelSelector
+	}
+	if claimSelector != nil {
+		affinity.ClaimSelector = *claimSelector
+	}
+	if weight == 0 {
+		affinity.WhenUnsatisfiable = "DoNotSelect"
+	} else {
+		affinity.Weight = weight
+		affinity.WhenUnsatisfiable = "SelectAnyway"
+	}
+	return affinity
+}
+
+func NewSpread(mode, key string, maxSkew int32) clusterapiv1alpha1.SpreadConstraintsTerm {
+	return clusterapiv1alpha1.SpreadConstraintsTerm{
+		MaxSkew:           maxSkew,
+		TopologyKeyType:   mode,
+		TopologyKey:       key,
+		WhenUnsatisfiable: "DoNotSelect",
+	}
 }
 
 type placementDecisionBuilder struct {

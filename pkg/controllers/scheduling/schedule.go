@@ -14,22 +14,67 @@ import (
 	clusterlisterv1alpha1 "github.com/open-cluster-management/api/client/cluster/listers/cluster/v1alpha1"
 	clusterapiv1 "github.com/open-cluster-management/api/cluster/v1"
 	clusterapiv1alpha1 "github.com/open-cluster-management/api/cluster/v1alpha1"
+	"github.com/open-cluster-management/placement/pkg/controllers/scheduling/plugins"
 )
 
-type scheduleFunc func(
-	ctx context.Context,
-	placement *clusterapiv1alpha1.Placement,
-	clusters []*clusterapiv1.ManagedCluster,
-	clusterClient clusterclient.Interface,
-	placementDecisionLister clusterlisterv1alpha1.PlacementDecisionLister,
-) (*scheduleResult, error)
+type scheduler interface {
+	schedule(
+		ctx context.Context,
+		placement *clusterapiv1alpha1.Placement,
+		clusters []*clusterapiv1.ManagedCluster,
+		clusterClient clusterclient.Interface,
+		placementDecisionLister clusterlisterv1alpha1.PlacementDecisionLister,
+	) (*scheduleResult, error)
+}
+
+type pluginScheduler struct {
+	scheduler *plugins.Scheduler
+}
+
+type predicateScheduler struct{}
 
 type scheduleResult struct {
 	scheduled   int
 	unscheduled int
 }
 
-func schedule(
+func (p *pluginScheduler) schedule(
+	ctx context.Context,
+	placement *clusterapiv1alpha1.Placement,
+	clusters []*clusterapiv1.ManagedCluster,
+	clusterClient clusterclient.Interface,
+	placementDecisionLister clusterlisterv1alpha1.PlacementDecisionLister,
+) (*scheduleResult, error) {
+	// filter clusters with cluster predicates
+	feasibleClusters, err := matchWithClusterPredicates(placement.Spec.Predicates, clusters)
+	if err != nil {
+		return nil, err
+	}
+
+	selected := p.scheduler.Schedule(placement, feasibleClusters)
+	decisions := []clusterapiv1alpha1.ClusterDecision{}
+	for cluster := range selected {
+		decision := clusterapiv1alpha1.ClusterDecision{ClusterName: cluster}
+		decisions = append(decisions, decision)
+	}
+	scheduled, unscheduled := len(decisions), 0
+	if placement.Spec.NumberOfClusters != nil {
+		unscheduled = int(*placement.Spec.NumberOfClusters) - scheduled
+	}
+
+	// bind the cluster decisions into placementdecisions
+	err = bind(ctx, placement, decisions, clusterClient, placementDecisionLister)
+	if err != nil {
+		return nil, err
+	}
+
+	return &scheduleResult{
+		scheduled:   scheduled,
+		unscheduled: unscheduled,
+	}, nil
+}
+
+func (p *predicateScheduler) schedule(
 	ctx context.Context,
 	placement *clusterapiv1alpha1.Placement,
 	clusters []*clusterapiv1.ManagedCluster,

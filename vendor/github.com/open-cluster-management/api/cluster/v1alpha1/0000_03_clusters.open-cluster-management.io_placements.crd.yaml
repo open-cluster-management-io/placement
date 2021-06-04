@@ -53,6 +53,223 @@ spec:
             description: Spec defines the attributes of Placement.
             type: object
             properties:
+              affinity:
+                description: Affinity defines the affinity of the placement decision
+                  with cluster.
+                type: object
+                properties:
+                  clusterAffinity:
+                    description: ClusterAffinity defines that placement decisions
+                      are preferred to be put in the certain set of clusters. Each
+                      ClusterAffinity has a weight and the cluster with the maximum
+                      sum weight is selected at first.
+                    type: array
+                    items:
+                      description: ClusterAffinityTerm defines an affinity terminology
+                      type: object
+                      properties:
+                        claimSelector:
+                          description: ClaimSelector represents a selector of ManagedClusters
+                            by clusterClaims in status
+                          type: object
+                          properties:
+                            matchExpressions:
+                              description: matchExpressions is a list of cluster claim
+                                selector requirements. The requirements are ANDed.
+                              type: array
+                              items:
+                                description: A label selector requirement is a selector
+                                  that contains values, a key, and an operator that
+                                  relates the key and values.
+                                type: object
+                                required:
+                                - key
+                                - operator
+                                properties:
+                                  key:
+                                    description: key is the label key that the selector
+                                      applies to.
+                                    type: string
+                                  operator:
+                                    description: operator represents a key's relationship
+                                      to a set of values. Valid operators are In,
+                                      NotIn, Exists and DoesNotExist.
+                                    type: string
+                                  values:
+                                    description: values is an array of string values.
+                                      If the operator is In or NotIn, the values array
+                                      must be non-empty. If the operator is Exists
+                                      or DoesNotExist, the values array must be empty.
+                                      This array is replaced during a strategic merge
+                                      patch.
+                                    type: array
+                                    items:
+                                      type: string
+                        labelSelector:
+                          description: LabelSelector represents a selector of ManagedClusters
+                            by label
+                          type: object
+                          properties:
+                            matchExpressions:
+                              description: matchExpressions is a list of label selector
+                                requirements. The requirements are ANDed.
+                              type: array
+                              items:
+                                description: A label selector requirement is a selector
+                                  that contains values, a key, and an operator that
+                                  relates the key and values.
+                                type: object
+                                required:
+                                - key
+                                - operator
+                                properties:
+                                  key:
+                                    description: key is the label key that the selector
+                                      applies to.
+                                    type: string
+                                  operator:
+                                    description: operator represents a key's relationship
+                                      to a set of values. Valid operators are In,
+                                      NotIn, Exists and DoesNotExist.
+                                    type: string
+                                  values:
+                                    description: values is an array of string values.
+                                      If the operator is In or NotIn, the values array
+                                      must be non-empty. If the operator is Exists
+                                      or DoesNotExist, the values array must be empty.
+                                      This array is replaced during a strategic merge
+                                      patch.
+                                    type: array
+                                    items:
+                                      type: string
+                            matchLabels:
+                              description: matchLabels is a map of {key,value} pairs.
+                                A single {key,value} in the matchLabels map is equivalent
+                                to an element of matchExpressions, whose key field
+                                is "key", the operator is "In", and the values array
+                                contains only "value". The requirements are ANDed.
+                              type: object
+                              additionalProperties:
+                                type: string
+                        weight:
+                          description: Weight defines the importance of this affinity
+                            terminology
+                          type: integer
+                          format: int32
+                        whenUnsatisfiable:
+                          description: 'WhenUnsatisfiable represents when clusterSelector
+                            cannot be met, what action should be taken to a cluster:
+                            DoNotSelect tells the placement controller not to select
+                            the cluster. It''s a hard constraint. SelectAnyway tells
+                            the placement controller to still select it while prioritizing
+                            clusters. It''s a soft constraint.'
+                          type: string
+                  clusterAntiAffinity:
+                    description: ClusterAntiAffinity defines that placement decisions
+                      are not preferred to be put in the certain set of clusters.
+                      Each ClusterAntiAffinity has a weight and the cluster with the
+                      maximum sum weight is selected at last.
+                    type: array
+                    items:
+                      description: ClusterAffinityTerm defines an affinity terminology
+                      type: object
+                      properties:
+                        claimSelector:
+                          description: ClaimSelector represents a selector of ManagedClusters
+                            by clusterClaims in status
+                          type: object
+                          properties:
+                            matchExpressions:
+                              description: matchExpressions is a list of cluster claim
+                                selector requirements. The requirements are ANDed.
+                              type: array
+                              items:
+                                description: A label selector requirement is a selector
+                                  that contains values, a key, and an operator that
+                                  relates the key and values.
+                                type: object
+                                required:
+                                - key
+                                - operator
+                                properties:
+                                  key:
+                                    description: key is the label key that the selector
+                                      applies to.
+                                    type: string
+                                  operator:
+                                    description: operator represents a key's relationship
+                                      to a set of values. Valid operators are In,
+                                      NotIn, Exists and DoesNotExist.
+                                    type: string
+                                  values:
+                                    description: values is an array of string values.
+                                      If the operator is In or NotIn, the values array
+                                      must be non-empty. If the operator is Exists
+                                      or DoesNotExist, the values array must be empty.
+                                      This array is replaced during a strategic merge
+                                      patch.
+                                    type: array
+                                    items:
+                                      type: string
+                        labelSelector:
+                          description: LabelSelector represents a selector of ManagedClusters
+                            by label
+                          type: object
+                          properties:
+                            matchExpressions:
+                              description: matchExpressions is a list of label selector
+                                requirements. The requirements are ANDed.
+                              type: array
+                              items:
+                                description: A label selector requirement is a selector
+                                  that contains values, a key, and an operator that
+                                  relates the key and values.
+                                type: object
+                                required:
+                                - key
+                                - operator
+                                properties:
+                                  key:
+                                    description: key is the label key that the selector
+                                      applies to.
+                                    type: string
+                                  operator:
+                                    description: operator represents a key's relationship
+                                      to a set of values. Valid operators are In,
+                                      NotIn, Exists and DoesNotExist.
+                                    type: string
+                                  values:
+                                    description: values is an array of string values.
+                                      If the operator is In or NotIn, the values array
+                                      must be non-empty. If the operator is Exists
+                                      or DoesNotExist, the values array must be empty.
+                                      This array is replaced during a strategic merge
+                                      patch.
+                                    type: array
+                                    items:
+                                      type: string
+                            matchLabels:
+                              description: matchLabels is a map of {key,value} pairs.
+                                A single {key,value} in the matchLabels map is equivalent
+                                to an element of matchExpressions, whose key field
+                                is "key", the operator is "In", and the values array
+                                contains only "value". The requirements are ANDed.
+                              type: object
+                              additionalProperties:
+                                type: string
+                        weight:
+                          description: Weight defines the importance of this affinity
+                            terminology
+                          type: integer
+                          format: int32
+                        whenUnsatisfiable:
+                          description: 'WhenUnsatisfiable represents when clusterSelector
+                            cannot be met, what action should be taken to a cluster:
+                            DoNotSelect tells the placement controller not to select
+                            the cluster. It''s a hard constraint. SelectAnyway tells
+                            the placement controller to still select it while prioritizing
+                            clusters. It''s a soft constraint.'
+                          type: string
               clusterSets:
                 description: ClusterSets represent the ManagedClusterSets from which
                   the ManagedClusters are selected. If the slice is empty, ManagedClusters
@@ -182,6 +399,41 @@ spec:
                               type: object
                               additionalProperties:
                                 type: string
+              spreadPolicy:
+                description: SpreadPolicy defines how placement decisions should be
+                  spreaded among the clusters in the scope of clustersets and predicates.
+                type: object
+                properties:
+                  spreadConstraints:
+                    description: SpreadConstraints defines how placement decision
+                      should be distributed among a set of clusters.
+                    type: array
+                    items:
+                      description: SpreadConstraintsTerm defines a terminology to
+                        spread placement decisions
+                      type: object
+                      properties:
+                        maxSkew:
+                          description: MaxSkew is the maximum degree of which the
+                            placement decision can be evenly distributed
+                          type: integer
+                          format: int32
+                        topologyKey:
+                          description: TopologyKey is either a label key or a cluster
+                            claim name of ManagedClusters
+                          type: string
+                        topologyKeyType:
+                          description: TopologyKeyType indicates the type of TopologyKey.
+                            It could be Label or Claim.
+                          type: string
+                        whenUnsatisfiable:
+                          description: 'WhenUnsatisfiable represents when maxSkew
+                            cannot be met, what action should be taken to a cluster:
+                            DoNotSelect tells the placement controller not to select
+                            the cluster. It''s a hard constraint. SelectAnyway tells
+                            the placement controller to still select it while prioritizing
+                            clusters. It''s a soft constraint.'
+                          type: string
           status:
             description: Status represents the current status of the Placement
             type: object
