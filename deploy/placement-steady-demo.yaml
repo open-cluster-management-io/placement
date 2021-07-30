@@ -1,0 +1,19 @@
+apiVersion: cluster.open-cluster-management.io/v1alpha1
+kind: Placement
+metadata:
+  name: placement2
+  namespace: default
+spec:
+  numberOfClusters: 3
+  clusterSets:
+    - prod
+  predicates:
+    - requiredClusterSelector:
+        labelSelector:
+          matchLabels:
+            purpose: test
+  resourceUsagePreferences:
+    - resourceName: cpu
+    - resourceName: memory
+  churningPolicy:
+    policyType: Steady

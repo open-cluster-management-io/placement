@@ -13,6 +13,7 @@ import (
 	"open-cluster-management.io/placement/pkg/plugins"
 	"open-cluster-management.io/placement/pkg/plugins/balance"
 	"open-cluster-management.io/placement/pkg/plugins/predicate"
+	"open-cluster-management.io/placement/pkg/plugins/resource"
 	"open-cluster-management.io/placement/pkg/plugins/steady"
 )
 
@@ -102,6 +103,7 @@ func NewPluginScheduler(handle plugins.Handle) *pluginScheduler {
 		prioritizers: []plugins.Prioritizer{
 			balance.New(handle),
 			steady.New(handle),
+			resource.New(handle),
 		},
 	}
 }
@@ -140,6 +142,12 @@ func (s *pluginScheduler) Schedule(
 	for _, cluster := range filtered {
 		scoreSum[cluster.Name] = 0
 	}
+	// define steady prioritizer weight, default is PolicyTypeNotSteady
+	steadyWeight := 0.1
+	if placement.Spec.ChurningPolicy.PolicyType == clusterapiv1alpha1.PolicyTypeSteady {
+		steadyWeight = float64(len(s.prioritizers) + 1)
+	}
+
 	for _, p := range s.prioritizers {
 		score, err := p.Score(ctx, placement, filtered)
 		if err != nil {
@@ -154,7 +162,11 @@ func (s *pluginScheduler) Schedule(
 		// balacne is 0/100, the balance plugin will trigger the reschedule for rebalancing when
 		// a cluster's decision count is larger than average.
 		for name, val := range score {
-			scoreSum[name] = scoreSum[name] + val
+			if p.Name() == "steady" {
+				scoreSum[name] = scoreSum[name] + int64(float64(val)*steadyWeight)
+			} else {
+				scoreSum[name] = scoreSum[name] + val
+			}
 		}
 	}
 
