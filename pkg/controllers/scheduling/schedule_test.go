@@ -57,6 +57,10 @@ func TestSchedule(t *testing.T) {
 					Name:   "steady",
 					Scores: PrioritizeSore{"cluster1": 0},
 				},
+				{
+					Name:   "resource",
+					Scores: make(PrioritizeSore),
+				},
 			},
 			clusters: []*clusterapiv1.ManagedCluster{
 				testinghelpers.NewManagedCluster("cluster1").WithLabel(clusterSetLabel, clusterSetName).Build(),
@@ -91,6 +95,10 @@ func TestSchedule(t *testing.T) {
 				{
 					Name:   "steady",
 					Scores: PrioritizeSore{"cluster1": 0},
+				},
+				{
+					Name:   "resource",
+					Scores: make(PrioritizeSore),
 				},
 			},
 			expectedUnScheduled: 2,
@@ -134,6 +142,10 @@ func TestSchedule(t *testing.T) {
 					Name:   "steady",
 					Scores: PrioritizeSore{"cluster1": 100, "cluster2": 100, "cluster3": 0},
 				},
+				{
+					Name:   "resource",
+					Scores: make(PrioritizeSore),
+				},
 			},
 			expectedUnScheduled: 0,
 		},
@@ -175,6 +187,10 @@ func TestSchedule(t *testing.T) {
 					Name:   "steady",
 					Scores: PrioritizeSore{"cluster1": 100, "cluster2": 0},
 				},
+				{
+					Name:   "resource",
+					Scores: make(PrioritizeSore),
+				},
 			},
 			expectedUnScheduled: 2,
 		},
@@ -213,6 +229,84 @@ func TestSchedule(t *testing.T) {
 				{
 					Name:   "steady",
 					Scores: PrioritizeSore{"cluster1": 0, "cluster2": 0, "cluster3": 0},
+				},
+				{
+					Name:   "resource",
+					Scores: make(PrioritizeSore),
+				},
+			},
+			expectedUnScheduled: 0,
+		},
+		{
+			name:      "schedule to cluster with most allocatable to capacity ratio ",
+			placement: testinghelpers.NewPlacement(placementNamespace, placementName).WithNOC(1).WithClusterResourcePreference(clusterapiv1alpha1.ClusterResourcePreferenceTypeMostAllocatableToCapacityRatio).Build(),
+			initObjs: []runtime.Object{
+				testinghelpers.NewClusterSet(clusterSetName),
+				testinghelpers.NewClusterSetBinding(placementNamespace, clusterSetName),
+			},
+			clusters: []*clusterapiv1.ManagedCluster{
+				testinghelpers.NewManagedCluster("cluster1").WithLabel(clusterSetLabel, clusterSetName).WithResource("10", "100", "100", "100").Build(),
+				testinghelpers.NewManagedCluster("cluster2").WithLabel(clusterSetLabel, clusterSetName).WithResource("9", "10", "90", "100").Build(),
+				testinghelpers.NewManagedCluster("cluster3").WithLabel(clusterSetLabel, clusterSetName).WithResource("8", "10", "80", "100").Build(),
+			},
+			expectedDecisions: []clusterapiv1alpha1.ClusterDecision{
+				{ClusterName: "cluster2"},
+			},
+			expectedFilterResult: []FilterResult{
+				{
+					Name:             "predicate",
+					FilteredClusters: []string{"cluster2", "cluster3", "cluster1"},
+				},
+			},
+			expectedScoreResult: []PriorizeResult{
+				{
+					Name:   "balance",
+					Scores: PrioritizeSore{"cluster1": 100, "cluster2": 100, "cluster3": 100},
+				},
+				{
+					Name:   "steady",
+					Scores: PrioritizeSore{"cluster1": 0, "cluster2": 0, "cluster3": 0},
+				},
+				{
+					Name:   "resource",
+					Scores: PrioritizeSore{"cluster1": 0, "cluster2": 100, "cluster3": 71},
+				},
+			},
+			expectedUnScheduled: 0,
+		},
+		{
+			name:      "schedule to cluster with most allocatable",
+			placement: testinghelpers.NewPlacement(placementNamespace, placementName).WithNOC(1).WithClusterResourcePreference(clusterapiv1alpha1.ClusterResourcePreferenceTypeMostAllocatable).Build(),
+			initObjs: []runtime.Object{
+				testinghelpers.NewClusterSet(clusterSetName),
+				testinghelpers.NewClusterSetBinding(placementNamespace, clusterSetName),
+			},
+			clusters: []*clusterapiv1.ManagedCluster{
+				testinghelpers.NewManagedCluster("cluster1").WithLabel(clusterSetLabel, clusterSetName).WithResource("10", "100", "100", "100").Build(),
+				testinghelpers.NewManagedCluster("cluster2").WithLabel(clusterSetLabel, clusterSetName).WithResource("9", "10", "90", "100").Build(),
+				testinghelpers.NewManagedCluster("cluster3").WithLabel(clusterSetLabel, clusterSetName).WithResource("8", "10", "80", "100").Build(),
+			},
+			expectedDecisions: []clusterapiv1alpha1.ClusterDecision{
+				{ClusterName: "cluster1"},
+			},
+			expectedFilterResult: []FilterResult{
+				{
+					Name:             "predicate",
+					FilteredClusters: []string{"cluster1", "cluster2", "cluster3"},
+				},
+			},
+			expectedScoreResult: []PriorizeResult{
+				{
+					Name:   "balance",
+					Scores: PrioritizeSore{"cluster1": 100, "cluster2": 100, "cluster3": 100},
+				},
+				{
+					Name:   "steady",
+					Scores: PrioritizeSore{"cluster1": 0, "cluster2": 0, "cluster3": 0},
+				},
+				{
+					Name:   "resource",
+					Scores: PrioritizeSore{"cluster1": 100, "cluster2": 50, "cluster3": 0},
 				},
 			},
 			expectedUnScheduled: 0,
@@ -262,6 +356,10 @@ func TestSchedule(t *testing.T) {
 				{
 					Name:   "steady",
 					Scores: PrioritizeSore{"cluster1": 0, "cluster2": 0, "cluster3": 100},
+				},
+				{
+					Name:   "resource",
+					Scores: make(PrioritizeSore),
 				},
 			},
 			expectedUnScheduled: 0,

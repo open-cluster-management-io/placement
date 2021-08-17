@@ -53,8 +53,8 @@ func (b *Resource) Score(ctx context.Context, placement *clusterapiv1alpha1.Plac
 }
 
 func mostAllocatableToCapacityRatio(placement *clusterapiv1alpha1.Placement, clusters []*clusterapiv1.ManagedCluster, scores map[string]int64) {
-	minScore := int64(100)
-	maxScore := int64(0)
+	minscore := int64(math.MaxInt64)
+	maxscore := int64(math.MinInt64)
 
 	for _, cluster := range clusters {
 		acpu, ccpu, amem, cmem := getClusterResources(cluster)
@@ -69,16 +69,16 @@ func mostAllocatableToCapacityRatio(placement *clusterapiv1alpha1.Placement, clu
 			}
 		}
 
-		minScore = min(minScore, scores[cluster.Name])
-		maxScore = max(maxScore, scores[cluster.Name])
+		minscore = min(minscore, scores[cluster.Name])
+		maxscore = max(maxscore, scores[cluster.Name])
 	}
 
-	normalizeScore(minScore, maxScore, clusters, scores)
+	normalizeScore(minscore, maxscore, clusters, scores)
 }
 
 func mostAllocatable(placement *clusterapiv1alpha1.Placement, clusters []*clusterapiv1.ManagedCluster, scores map[string]int64) {
-	minscore := int64(100)
-	maxscore := int64(0)
+	minscore := int64(math.MaxInt64)
+	maxscore := int64(math.MinInt64)
 
 	mincpu, maxcpu, minmem, maxmem := getClustersMinMaxAllocatableResources(clusters)
 
@@ -133,8 +133,7 @@ func normalizeScore(minScore, maxScore int64, clusters []*clusterapiv1.ManagedCl
 	for _, cluster := range clusters {
 		if minScore < maxScore {
 			scores[cluster.Name] = (scores[cluster.Name] - minScore) * 100 / (maxScore - minScore)
-		}
-		if minScore == maxScore {
+		} else if minScore == maxScore {
 			if minScore == 0 {
 				scores[cluster.Name] = 0
 			} else {
@@ -145,7 +144,7 @@ func normalizeScore(minScore, maxScore int64, clusters []*clusterapiv1.ManagedCl
 }
 
 func min(a, b int64) int64 {
-	if a > b {
+	if a < b {
 		return a
 	} else {
 		return b

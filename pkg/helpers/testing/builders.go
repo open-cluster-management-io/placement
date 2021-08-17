@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -75,6 +76,22 @@ func (b *placementBuilder) WithSatisfiedCondition(numbOfScheduledDecisions, numb
 		condition.Message = fmt.Sprintf("%d cluster decisions unscheduled", numbOfUnscheduledDecisions)
 	}
 	meta.SetStatusCondition(&b.placement.Status.Conditions, condition)
+	return b
+}
+
+func (b *placementBuilder) WithClusterResourcePreference(prefer clusterapiv1alpha1.ClusterResourcePreferenceType) *placementBuilder {
+	clusterResourcePreference := &clusterapiv1alpha1.ClusterResourcePreference{
+		Type: prefer,
+		ClusterResources: []clusterapiv1alpha1.ClusterResource{
+			{
+				ResourceName: clusterapiv1alpha1.ClusterResourceNameMemory,
+			},
+			{
+				ResourceName: clusterapiv1alpha1.ClusterResourceNameNameCPU,
+			},
+		},
+	}
+	b.placement.Spec.ClusterResourcePreference = clusterResourcePreference
 	return b
 }
 
@@ -189,6 +206,19 @@ func (b *managedClusterBuilder) WithClaim(name, value string) *managedClusterBui
 	}
 
 	b.cluster.Status.ClusterClaims = clusterClaims
+	return b
+}
+
+func (b *managedClusterBuilder) WithResource(acpu, ccpu, amem, cmem string) *managedClusterBuilder {
+	allocatable := map[clusterapiv1.ResourceName]resource.Quantity{}
+	capacity := map[clusterapiv1.ResourceName]resource.Quantity{}
+	allocatable[clusterapiv1.ResourceCPU], _ = resource.ParseQuantity(acpu)
+	allocatable[clusterapiv1.ResourceMemory], _ = resource.ParseQuantity(amem)
+	capacity[clusterapiv1.ResourceCPU], _ = resource.ParseQuantity(ccpu)
+	capacity[clusterapiv1.ResourceMemory], _ = resource.ParseQuantity(cmem)
+
+	b.cluster.Status.Allocatable = allocatable
+	b.cluster.Status.Capacity = capacity
 	return b
 }
 
