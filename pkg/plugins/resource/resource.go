@@ -7,18 +7,21 @@ import (
 	clusterapiv1 "open-cluster-management.io/api/cluster/v1"
 	clusterapiv1alpha1 "open-cluster-management.io/api/cluster/v1alpha1"
 	"open-cluster-management.io/placement/pkg/plugins"
+	"open-cluster-management.io/placement/pkg/plugins/util"
 )
 
 const (
 	placementLabel = "cluster.open-cluster-management.io/placement"
 	description    = `
-	Resource prioritizer makes the scheduling decisions based on cluster resource utilization rate.
-	The cluster with the least resource utilization rate is given the highest score.
-	The source could be cpu, memory or both of them.
+	Resource prioritizer makes the scheduling decisions based on the resource allocatable/capacity 
+	or allocatable of managed clusters.
+    The clusters that has the most allocatable/capacity or allocatable are given the highest score, 
+	while the least is given the lowest score.
 	`
 )
 
 var _ plugins.Prioritizer = &Resource{}
+var scale = int64(2)
 
 type Resource struct {
 	handle plugins.Handle
@@ -69,11 +72,11 @@ func mostAllocatableToCapacityRatio(placement *clusterapiv1alpha1.Placement, clu
 			}
 		}
 
-		minscore = min(minscore, scores[cluster.Name])
-		maxscore = max(maxscore, scores[cluster.Name])
+		minscore = util.Min(minscore, scores[cluster.Name])
+		maxscore = util.Max(maxscore, scores[cluster.Name])
 	}
 
-	normalizeScore(minscore, maxscore, clusters, scores)
+	util.NormalizeScore(minscore, maxscore, scale, clusters, scores)
 }
 
 func mostAllocatable(placement *clusterapiv1alpha1.Placement, clusters []*clusterapiv1.ManagedCluster, scores map[string]int64) {
@@ -95,11 +98,11 @@ func mostAllocatable(placement *clusterapiv1alpha1.Placement, clusters []*cluste
 			}
 		}
 
-		minscore = min(minscore, scores[cluster.Name])
-		maxscore = max(maxscore, scores[cluster.Name])
+		minscore = util.Min(minscore, scores[cluster.Name])
+		maxscore = util.Max(maxscore, scores[cluster.Name])
 	}
 
-	normalizeScore(minscore, maxscore, clusters, scores)
+	util.NormalizeScore(minscore, maxscore, scale, clusters, scores)
 }
 
 func getClusterResources(cluster *clusterapiv1.ManagedCluster) (acpu, ccpu, amem, cmem float64) {
@@ -121,40 +124,4 @@ func getClustersMinMaxAllocatableResources(clusters []*clusterapiv1.ManagedClust
 	}
 
 	return mincpu, maxcpu, minmem, maxmem
-}
-
-func normalizeScore(minScore, maxScore int64, clusters []*clusterapiv1.ManagedCluster, scores map[string]int64) {
-	// normalize the score and ensure the value falls in the range between 0 and 100.
-	if minScore > maxScore {
-		return
-	}
-
-	// normalized = (score - min(score)) * 100 / (max(score) - min(score))
-	for _, cluster := range clusters {
-		if minScore < maxScore {
-			scores[cluster.Name] = (scores[cluster.Name] - minScore) * 100 / (maxScore - minScore)
-		} else if minScore == maxScore {
-			if minScore == 0 {
-				scores[cluster.Name] = 0
-			} else {
-				scores[cluster.Name] = 100
-			}
-		}
-	}
-}
-
-func min(a, b int64) int64 {
-	if a < b {
-		return a
-	} else {
-		return b
-	}
-}
-
-func max(a, b int64) int64 {
-	if a > b {
-		return a
-	} else {
-		return b
-	}
 }

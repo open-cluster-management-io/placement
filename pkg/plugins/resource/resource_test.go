@@ -28,7 +28,7 @@ func TestScoreClusterWithResource(t *testing.T) {
 				testinghelpers.NewManagedCluster("cluster3").WithResource("8", "10", "80", "100").Build(),
 			},
 			existingDecisions: []runtime.Object{},
-			expectedScores:    map[string]int64{"cluster1": 0, "cluster2": 100, "cluster3": 71},
+			expectedScores:    map[string]int64{"cluster1": -100, "cluster2": 100, "cluster3": 42},
 		},
 		{
 			name:      "scores with ClusterResourcePreference type is MostAllocatable",
@@ -39,7 +39,7 @@ func TestScoreClusterWithResource(t *testing.T) {
 				testinghelpers.NewManagedCluster("cluster3").WithResource("8", "10", "80", "100").Build(),
 			},
 			existingDecisions: []runtime.Object{},
-			expectedScores:    map[string]int64{"cluster1": 100, "cluster2": 50, "cluster3": 0},
+			expectedScores:    map[string]int64{"cluster1": 100, "cluster2": 0, "cluster3": -100},
 		},
 		{
 			name:      "scores with ClusterResourcePreference type is nil",

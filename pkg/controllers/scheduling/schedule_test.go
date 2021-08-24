@@ -269,7 +269,7 @@ func TestSchedule(t *testing.T) {
 				},
 				{
 					Name:   "resource",
-					Scores: PrioritizeSore{"cluster1": 0, "cluster2": 100, "cluster3": 71},
+					Scores: PrioritizeSore{"cluster1": -100, "cluster2": 100, "cluster3": 42},
 				},
 			},
 			expectedUnScheduled: 0,
@@ -306,7 +306,7 @@ func TestSchedule(t *testing.T) {
 				},
 				{
 					Name:   "resource",
-					Scores: PrioritizeSore{"cluster1": 100, "cluster2": 50, "cluster3": 0},
+					Scores: PrioritizeSore{"cluster1": 100, "cluster2": 0, "cluster3": -100},
 				},
 			},
 			expectedUnScheduled: 0,
