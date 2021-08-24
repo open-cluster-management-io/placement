@@ -23,6 +23,8 @@ const (
 var _ plugins.Prioritizer = &Resource{}
 var scale = int64(2)
 
+type ResourceValueList map[clusterapiv1.ResourceName]float64
+
 type Resource struct {
 	handle plugins.Handle
 }
@@ -60,15 +62,16 @@ func mostAllocatableToCapacityRatio(placement *clusterapiv1alpha1.Placement, clu
 	maxscore := int64(math.MinInt64)
 
 	for _, cluster := range clusters {
-		acpu, ccpu, amem, cmem := getClusterResources(cluster)
+		allocatable, capacity := getClusterResources(cluster)
 
 		// score = sum(resource_x_allocatable / resource_x_capacity))
-		for _, r := range placement.Spec.ClusterResourcePreference.ClusterResources {
-			if r.ResourceName == clusterapiv1alpha1.ClusterResourceNameNameCPU && ccpu != 0 {
-				scores[cluster.Name] += int64(acpu * 100.0 / ccpu)
-			}
-			if r.ResourceName == clusterapiv1alpha1.ClusterResourceNameMemory && cmem != 0 {
-				scores[cluster.Name] += int64(amem * 100.0 / cmem)
+		for _, clusterResource := range placement.Spec.ClusterResourcePreference.ClusterResources {
+			resourceName := clusterapiv1.ResourceName(clusterResource.ResourceName)
+
+			allocatable, hasAllocatable := allocatable[resourceName]
+			capacity, hasCapacity := capacity[resourceName]
+			if hasAllocatable && hasCapacity && capacity != 0 {
+				scores[cluster.Name] += int64(allocatable * 100.0 / capacity)
 			}
 		}
 
@@ -83,18 +86,21 @@ func mostAllocatable(placement *clusterapiv1alpha1.Placement, clusters []*cluste
 	minscore := int64(math.MaxInt64)
 	maxscore := int64(math.MinInt64)
 
-	mincpu, maxcpu, minmem, maxmem := getClustersMinMaxAllocatableResources(clusters)
+	minAllocatableResources, maxAllocatableResources := getClustersMinMaxAllocatableResources(clusters)
 
 	for _, cluster := range clusters {
-		acpu, _, amem, _ := getClusterResources(cluster)
+		allocatable, _ := getClusterResources(cluster)
 
 		// score = sum((resource_x_allocatable - min(resource_x_allocatable)) / (max(resource_x_allocatable) - min(resource_x_allocatable))
-		for _, r := range placement.Spec.ClusterResourcePreference.ClusterResources {
-			if r.ResourceName == clusterapiv1alpha1.ClusterResourceNameNameCPU && (maxcpu-mincpu) != 0 {
-				scores[cluster.Name] += int64((acpu - mincpu) * 100.0 / (maxcpu - mincpu))
-			}
-			if r.ResourceName == clusterapiv1alpha1.ClusterResourceNameMemory && (maxmem-minmem) != 0 {
-				scores[cluster.Name] += int64((amem - minmem) * 100.0 / (maxmem - minmem))
+		for _, clusterResource := range placement.Spec.ClusterResourcePreference.ClusterResources {
+			resourceName := clusterapiv1.ResourceName(clusterResource.ResourceName)
+
+			minAllocatable, hasMin := minAllocatableResources[resourceName]
+			maxAllocatable, hasMax := maxAllocatableResources[resourceName]
+			allocatable, hasAllocatable := allocatable[resourceName]
+
+			if hasMin && hasMax && hasAllocatable && (maxAllocatable-minAllocatable) != 0 {
+				scores[cluster.Name] += int64((allocatable - minAllocatable) * 100.0 / (maxAllocatable - minAllocatable))
 			}
 		}
 
@@ -105,23 +111,42 @@ func mostAllocatable(placement *clusterapiv1alpha1.Placement, clusters []*cluste
 	util.NormalizeScore(minscore, maxscore, scale, clusters, scores)
 }
 
-func getClusterResources(cluster *clusterapiv1.ManagedCluster) (acpu, ccpu, amem, cmem float64) {
-	arcpu := cluster.Status.Allocatable[clusterapiv1.ResourceCPU]
-	crcpu := cluster.Status.Capacity[clusterapiv1.ResourceCPU]
-	armem := cluster.Status.Allocatable[clusterapiv1.ResourceMemory]
-	crmem := cluster.Status.Capacity[clusterapiv1.ResourceMemory]
+func getClusterResources(cluster *clusterapiv1.ManagedCluster) (allocatable, capacity ResourceValueList) {
+	allocatable = make(ResourceValueList)
+	capacity = make(ResourceValueList)
 
-	return arcpu.AsApproximateFloat64(), crcpu.AsApproximateFloat64(), armem.AsApproximateFloat64(), crmem.AsApproximateFloat64()
-}
-
-func getClustersMinMaxAllocatableResources(clusters []*clusterapiv1.ManagedCluster) (mincpu, maxcpu, minmem, maxmem float64) {
-	for _, cluster := range clusters {
-		acpu, _, amem, _ := getClusterResources(cluster)
-		mincpu = math.Min(mincpu, acpu)
-		maxcpu = math.Max(maxcpu, acpu)
-		minmem = math.Min(minmem, amem)
-		maxmem = math.Max(maxmem, amem)
+	for k, v := range cluster.Status.Allocatable {
+		allocatable[k] = v.AsApproximateFloat64()
 	}
 
-	return mincpu, maxcpu, minmem, maxmem
+	for k, v := range cluster.Status.Capacity {
+		capacity[k] = v.AsApproximateFloat64()
+	}
+
+	return allocatable, capacity
+}
+
+func getClustersMinMaxAllocatableResources(clusters []*clusterapiv1.ManagedCluster) (min, max ResourceValueList) {
+	min = make(ResourceValueList)
+	max = make(ResourceValueList)
+
+	for _, cluster := range clusters {
+		allocatable, _ := getClusterResources(cluster)
+		for k, v := range allocatable {
+			_, hasMin := min[k]
+			_, hasMax := max[k]
+			if hasMin {
+				min[k] = math.Min(min[k], v)
+			} else {
+				min[k] = v
+			}
+			if hasMax {
+				max[k] = math.Max(max[k], v)
+			} else {
+				max[k] = v
+			}
+		}
+	}
+
+	return min, max
 }
