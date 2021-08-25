@@ -49,12 +49,14 @@ var _ = ginkgo.Describe("Placement", func() {
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 
 		// start controller manager
-		var ctx context.Context
-		ctx, cancel = context.WithCancel(context.Background())
-		go controllers.RunControllerManager(ctx, &controllercmd.ControllerContext{
-			KubeConfig:    restConfig,
-			EventRecorder: util.NewIntegrationTestEventRecorder("integration"),
-		})
+		if enableTestEnv {
+			var ctx context.Context
+			ctx, cancel = context.WithCancel(context.Background())
+			go controllers.RunControllerManager(ctx, &controllercmd.ControllerContext{
+				KubeConfig:    restConfig,
+				EventRecorder: util.NewIntegrationTestEventRecorder("integration"),
+			})
+		}
 	})
 
 	ginkgo.AfterEach(func() {

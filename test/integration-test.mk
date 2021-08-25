@@ -30,3 +30,8 @@ test-integration: ensure-kubebuilder-tools
 	go test -c ./test/integration
 	./integration.test -ginkgo.slowSpecThreshold=15 -ginkgo.v -ginkgo.failFast
 .PHONY: test-integration
+
+test-integration-in-kube: deploy-hub
+	go test -c ./test/integration
+	KUBE_TEST_ENV=false ./integration.test -ginkgo.slowSpecThreshold=15 -ginkgo.v -ginkgo.failFast
+.PHONY: test-integration-in-kube
