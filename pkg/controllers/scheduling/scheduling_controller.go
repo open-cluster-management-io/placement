@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/openshift/library-go/pkg/controller/factory"
 	"github.com/openshift/library-go/pkg/operator/events"
@@ -147,6 +148,7 @@ func NewSchedulingController(
 		}, placementDecisionInformer.Informer()).
 		WithBareInformers(clusterInformer.Informer(), clusterSetInformer.Informer(), clusterSetBindingInformer.Informer()).
 		WithSync(c.sync).
+		ResyncEvery(5*time.Minute).
 		ToController(schedulingControllerName, recorder)
 }
 

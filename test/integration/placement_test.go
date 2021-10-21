@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
@@ -378,6 +379,42 @@ var _ = ginkgo.Describe("Placement", func() {
 		}
 	}
 
+	assertCreatingAddOnPlacementScores := func(clusternamespace, crname, scorename string, score int32) {
+		ginkgo.By(fmt.Sprintf("Create namespace %s for addonplacementscores %s", clusternamespace, crname))
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clusternamespace,
+			},
+		}
+		_, err := kubeClient.CoreV1().Namespaces().Create(context.Background(), ns, metav1.CreateOptions{})
+
+		ginkgo.By(fmt.Sprintf("Create addonplacementscores %s in %s", crname, clusternamespace))
+		gomega.Expect(err).ToNot(gomega.HaveOccurred())
+		addOn := &clusterapiv1alpha1.AddOnPlacementScore{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: clusternamespace,
+				Name:      crname,
+			},
+		}
+
+		addOn, err = clusterClient.ClusterV1alpha1().AddOnPlacementScores(clusternamespace).Create(context.Background(), addOn, metav1.CreateOptions{})
+		gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+		vu := metav1.NewTime(time.Now().Add(10 * time.Second))
+		addOn.Status = clusterapiv1alpha1.AddOnPlacementScoreStatus{
+			Scores: []clusterapiv1alpha1.AddOnPlacementScoreItem{
+				{
+					Name:  scorename,
+					Value: score,
+				},
+			},
+			ValidUntil: &vu,
+		}
+
+		_, err = clusterClient.ClusterV1alpha1().AddOnPlacementScores(clusternamespace).UpdateStatus(context.Background(), addOn, metav1.UpdateOptions{})
+		gomega.Expect(err).ToNot(gomega.HaveOccurred())
+	}
+
 	ginkgo.Context("Scheduling", func() {
 		ginkgo.AfterEach(func() {
 			ginkgo.By("Delete placement")
@@ -589,6 +626,44 @@ var _ = ginkgo.Describe("Placement", func() {
 			assertCreatingPlacement(placementName, noc(2), 2, prioritizerPolicy)
 			assertClusterNamesOfDecisions(placementName, []string{clusterNames[0], clusterNames[2]})
 
+		})
+
+		ginkgo.It("Should schedule successfully based on AddOnPlacementScore", func() {
+			// cluster settings
+			clusterNames := []string{
+				clusterName + "-1",
+				clusterName + "-2",
+				clusterName + "-3",
+			}
+
+			// placement settings
+			prioritizerPolicy := clusterapiv1alpha1.PrioritizerPolicy{
+				Mode: clusterapiv1alpha1.PrioritizerPolicyModeExact,
+				Configurations: []clusterapiv1alpha1.PrioritizerConfig{
+					{
+						ScoreCoordinate: &clusterapiv1alpha1.ScoreCoordinate{
+
+							Type: "AddOn",
+							AddOn: &clusterapiv1alpha1.AddOnScore{
+								ResourceName: "demo",
+								ScoreName:    "demo",
+							},
+						},
+						Weight: 1,
+					},
+				},
+			}
+
+			//Creating the clusters with resources
+			assertBindingClusterSet(clusterSet1Name)
+			assertCreatingClustersWithNames(clusterSet1Name, clusterNames)
+			for i, name := range clusterNames {
+				assertCreatingAddOnPlacementScores(name, "demo", "demo", int32(30-i))
+			}
+
+			//Checking the result of the placement
+			assertCreatingPlacement(placementName, noc(2), 2, prioritizerPolicy)
+			assertClusterNamesOfDecisions(placementName, []string{clusterNames[0], clusterNames[1]})
 		})
 
 		ginkgo.It("Should keep steady successfully even placementdecisions' balance and cluster situation changes", func() {
