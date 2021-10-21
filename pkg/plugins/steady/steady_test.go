@@ -62,7 +62,7 @@ func TestScoreClusterWithSteady(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			steady := &Steady{
-				handle: testinghelpers.NewFakePluginHandle(t, nil, c.existingDecisions...),
+				handle: testinghelpers.NewFakePluginHandle(t, nil, nil, c.existingDecisions...),
 			}
 
 			scores, err := steady.Score(context.TODO(), c.placement, c.clusters)

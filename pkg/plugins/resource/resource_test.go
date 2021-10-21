@@ -122,7 +122,7 @@ func TestScoreClusterWithResource(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			resource := &ResourcePrioritizer{
-				handle:    testinghelpers.NewFakePluginHandle(t, nil, c.existingDecisions...),
+				handle:    testinghelpers.NewFakePluginHandle(t, nil, nil, c.existingDecisions...),
 				resource:  c.resource,
 				algorithm: c.algorithm,
 			}

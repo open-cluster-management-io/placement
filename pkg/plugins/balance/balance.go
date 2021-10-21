@@ -39,6 +39,10 @@ func (b *Balance) Description() string {
 	return description
 }
 
+func (r *Balance) PreScore(ctx context.Context, placement *clusterapiv1alpha1.Placement, clusters []*clusterapiv1.ManagedCluster) error {
+	return nil
+}
+
 func (b *Balance) Score(ctx context.Context, placement *clusterapiv1alpha1.Placement, clusters []*clusterapiv1.ManagedCluster) (map[string]int64, error) {
 	scores := map[string]int64{}
 	for _, cluster := range clusters {

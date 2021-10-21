@@ -5,7 +5,7 @@ metadata:
 rules:
 # Allow controller to get/list/watch/create/delete configmaps
 - apiGroups: [""]
-  resources: ["configmaps", "pods"]
+  resources: ["configmaps", "pods", "namespaces"]
   verbs: ["get", "list", "watch", "create", "delete", "update"]
 - apiGroups: ["apps"]
   resources: ["replicasets"]
@@ -18,6 +18,9 @@ rules:
 - apiGroups: ["cluster.open-cluster-management.io"]
   resources: ["managedclusters", "managedclustersets", "managedclustersetbindings"]
   verbs: ["get", "list", "watch"]
+- apiGroups: ["cluster.open-cluster-management.io"]
+  resources: ["managedclusterscalars"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 # Allow controller to manage placements/placementdecisions
 - apiGroups: ["cluster.open-cluster-management.io"]
   resources: ["placements"]

@@ -28,6 +28,7 @@ resources:
 - ./managedclusters.crd.yaml
 - ./managedclustersets.crd.yaml
 - ./managedclustersetbindings.crd.yaml
+- ./managedclusterscalars.crd.yaml
 - ./placements.crd.yaml
 - ./placementdecisions.crd.yaml
 - ./namespace.yaml

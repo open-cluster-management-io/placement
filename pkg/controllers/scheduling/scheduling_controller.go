@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/openshift/library-go/pkg/controller/factory"
 	"github.com/openshift/library-go/pkg/operator/events"
@@ -147,6 +148,7 @@ func NewSchedulingController(
 		}, placementDecisionInformer.Informer()).
 		WithBareInformers(clusterInformer.Informer(), clusterSetInformer.Informer(), clusterSetBindingInformer.Informer()).
 		WithSync(c.sync).
+		ResyncEvery(5*time.Minute).
 		ToController(schedulingControllerName, recorder)
 }
 
@@ -192,6 +194,7 @@ func (c *schedulingController) sync(ctx context.Context, syncCtx factory.SyncCon
 	// schedule placement with scheduler
 	scheduleResult, err := c.scheduler.Schedule(ctx, placement, clusters)
 	if err != nil {
+		//syncCtx.Queue().Add(fmt.Sprintf("%s/%s", namespace, name))
 		return err
 	}
 

@@ -77,6 +77,10 @@ func (r *ResourcePrioritizer) Description() string {
 	return description
 }
 
+func (r *ResourcePrioritizer) PreScore(ctx context.Context, placement *clusterapiv1alpha1.Placement, clusters []*clusterapiv1.ManagedCluster) error {
+	return nil
+}
+
 func (r *ResourcePrioritizer) Score(ctx context.Context, placement *clusterapiv1alpha1.Placement, clusters []*clusterapiv1.ManagedCluster) (map[string]int64, error) {
 	if r.algorithm == "Allocatable" {
 		return mostResourceAllocatableScores(r.resource, clusters)

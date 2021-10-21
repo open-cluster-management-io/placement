@@ -41,6 +41,10 @@ func (s *Steady) Description() string {
 	return description
 }
 
+func (r *Steady) PreScore(ctx context.Context, placement *clusterapiv1alpha1.Placement, clusters []*clusterapiv1.ManagedCluster) error {
+	return nil
+}
+
 func (s *Steady) Score(
 	ctx context.Context, placement *clusterapiv1alpha1.Placement, clusters []*clusterapiv1.ManagedCluster) (map[string]int64, error) {
 	// query placementdecisions with label selector

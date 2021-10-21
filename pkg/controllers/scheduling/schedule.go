@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"k8s.io/client-go/kubernetes"
 	kevents "k8s.io/client-go/tools/events"
 	clusterclient "open-cluster-management.io/api/client/cluster/clientset/versioned"
 	clusterlisterv1alpha1 "open-cluster-management.io/api/client/cluster/listers/cluster/v1alpha1"
@@ -13,9 +14,17 @@ import (
 	clusterapiv1alpha1 "open-cluster-management.io/api/cluster/v1alpha1"
 	"open-cluster-management.io/placement/pkg/plugins"
 	"open-cluster-management.io/placement/pkg/plugins/balance"
+	"open-cluster-management.io/placement/pkg/plugins/customize"
 	"open-cluster-management.io/placement/pkg/plugins/predicate"
 	"open-cluster-management.io/placement/pkg/plugins/resource"
 	"open-cluster-management.io/placement/pkg/plugins/steady"
+)
+
+const (
+	PrioritizerBalance         string = "Balance"
+	PrioritizerSteady          string = "Steady"
+	PrioritizerResourcePrefix  string = "Resource"
+	PrioritizerCustomizePrefix string = "Customize"
 )
 
 // PrioritizerScore defines the score for each cluster
@@ -75,15 +84,17 @@ type schedulerHandler struct {
 	recorder                kevents.EventRecorder
 	placementDecisionLister clusterlisterv1alpha1.PlacementDecisionLister
 	clusterClient           clusterclient.Interface
+	kubeClient              *kubernetes.Clientset
 }
 
 func NewSchedulerHandler(
-	clusterClient clusterclient.Interface, placementDecisionLister clusterlisterv1alpha1.PlacementDecisionLister, recorder kevents.EventRecorder) plugins.Handle {
+	clusterClient clusterclient.Interface, kubeClient *kubernetes.Clientset, placementDecisionLister clusterlisterv1alpha1.PlacementDecisionLister, recorder kevents.EventRecorder) plugins.Handle {
 
 	return &schedulerHandler{
 		recorder:                recorder,
 		placementDecisionLister: placementDecisionLister,
 		clusterClient:           clusterClient,
+		kubeClient:              kubeClient,
 	}
 }
 
@@ -99,30 +110,29 @@ func (s *schedulerHandler) ClusterClient() clusterclient.Interface {
 	return s.clusterClient
 }
 
+func (s *schedulerHandler) KubeClient() *kubernetes.Clientset {
+	return s.kubeClient
+}
+
 // Initialize the default prioritizer weight.
 // Balane and Steady weight 1, others weight 0.
 // The default weight can be replaced by each placement's PrioritizerConfigs.
 var defaultPrioritizerConfig = map[string]int32{
-	"Balance": 1,
-	"Steady":  1,
+	PrioritizerBalance: 1,
+	PrioritizerSteady:  1,
 }
 
 type pluginScheduler struct {
+	handle             plugins.Handle
 	filters            []plugins.Filter
-	prioritizers       []plugins.Prioritizer
 	prioritizerWeights map[string]int32
 }
 
 func NewPluginScheduler(handle plugins.Handle) *pluginScheduler {
 	return &pluginScheduler{
+		handle: handle,
 		filters: []plugins.Filter{
 			predicate.New(handle),
-		},
-		prioritizers: []plugins.Prioritizer{
-			balance.New(handle),
-			steady.New(handle),
-			resource.NewResourcePrioritizerBuilder(handle).WithPrioritizerName("ResourceAllocatableCPU").Build(),
-			resource.NewResourcePrioritizerBuilder(handle).WithPrioritizerName("ResourceAllocatableMemory").Build(),
 		},
 		prioritizerWeights: defaultPrioritizerConfig,
 	}
@@ -156,29 +166,37 @@ func (s *pluginScheduler) Schedule(
 		results.filteredRecords[strings.Join(filterPipline, ",")] = filtered
 	}
 
-	// get weight for each prioritizers
+	// Prioritize clusters
+	// 1. Get weight for each prioritizers.
+	// For example, weights is {Steady: 1, Balance:1, CustomizeAAA:3, CustomizeBBB:2}.
 	weights, err := getWeights(s.prioritizerWeights, placement)
 	if err != nil {
 		return nil, err
 	}
-	// score clusters
+
+	// 2. Generate prioritizers for each placement whose weight > 0.
+	prioritizers := getPrioritizers(weights, s.handle)
+
+	// 3. Calculate clusters scores.
 	scoreSum := PrioritizerScore{}
 	for _, cluster := range filtered {
 		scoreSum[cluster.Name] = 0
 	}
-	for _, p := range s.prioritizers {
-		// If weight is 0 (set to 0 or not defined in map), skip Score().
-		weight := weights[p.Name()]
-		if weight == 0 {
-			results.scoreRecords = append(results.scoreRecords, PrioritizerResult{Name: p.Name(), Weight: weight, Scores: nil})
-			continue
+	for _, p := range prioritizers {
+		// If prescore failed, terminate the scheduling.
+		err := p.PreScore(ctx, placement, filtered)
+		if err != nil {
+			return nil, err
 		}
 
+		// Get cluster score.
 		score, err := p.Score(ctx, placement, filtered)
 		if err != nil {
 			return nil, err
 		}
 
+		// Record prioritizer score and weight
+		weight := weights[p.Name()]
 		results.scoreRecords = append(results.scoreRecords, PrioritizerResult{Name: p.Name(), Weight: weight, Scores: score})
 
 		// The final score is a sum of each prioritizer score * weight.
@@ -190,7 +208,7 @@ func (s *pluginScheduler) Schedule(
 
 	}
 
-	// Sort cluster by score, if score is equal, sort by name
+	// 4. Sort clusters by score, if score is equal, sort by name
 	sort.SliceStable(filtered, func(i, j int) bool {
 		if scoreSum[filtered[i].Name] == scoreSum[filtered[j].Name] {
 			return filtered[i].Name < filtered[j].Name
@@ -264,6 +282,27 @@ func mergeWeights(defaultWeight map[string]int32, customizedWeight []clusterapiv
 		weights[c.Name] = c.Weight
 	}
 	return weights
+}
+
+// Steady: 1, Balance:1, CustomizeAAA:3, CustomizeBBB:2
+func getPrioritizers(weights map[string]int32, handle plugins.Handle) []plugins.Prioritizer {
+	result := []plugins.Prioritizer{}
+	for k, v := range weights {
+		if v <= 0 {
+			continue
+		}
+		switch {
+		case k == PrioritizerBalance:
+			result = append(result, balance.New(handle))
+		case k == PrioritizerSteady:
+			result = append(result, steady.New(handle))
+		case strings.HasPrefix(k, PrioritizerCustomizePrefix):
+			result = append(result, customize.NewCustomizePrioritizerBuilder(handle).WithPrioritizerName(k).Build())
+		case strings.HasPrefix(k, PrioritizerResourcePrefix):
+			result = append(result, resource.NewResourcePrioritizerBuilder(handle).WithPrioritizerName(k).Build())
+		}
+	}
+	return result
 }
 
 func (r *scheduleResult) FilterResults() []FilterResult {

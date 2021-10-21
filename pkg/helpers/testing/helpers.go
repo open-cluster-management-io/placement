@@ -7,6 +7,7 @@ import (
 	"github.com/openshift/library-go/pkg/operator/events/eventstesting"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
 	clienttesting "k8s.io/client-go/testing"
 	kevents "k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/workqueue"
@@ -34,9 +35,10 @@ func NewFakeSyncContext(t *testing.T, queueKey string) *FakeSyncContext {
 }
 
 type FakePluginHandle struct {
-	recorder kevents.EventRecorder
-	lister   clusterlisterv1alpha1.PlacementDecisionLister
-	client   clusterclient.Interface
+	recorder   kevents.EventRecorder
+	lister     clusterlisterv1alpha1.PlacementDecisionLister
+	client     clusterclient.Interface
+	kubeClient *kubernetes.Clientset
 }
 
 func (f *FakePluginHandle) EventRecorder() kevents.EventRecorder { return f.recorder }
@@ -46,14 +48,18 @@ func (f *FakePluginHandle) DecisionLister() clusterlisterv1alpha1.PlacementDecis
 func (f *FakePluginHandle) ClusterClient() clusterclient.Interface {
 	return f.client
 }
+func (f *FakePluginHandle) KubeClient() *kubernetes.Clientset {
+	return f.kubeClient
+}
 
 func NewFakePluginHandle(
-	t *testing.T, client *clusterfake.Clientset, objects ...runtime.Object) *FakePluginHandle {
+	t *testing.T, client *clusterfake.Clientset, kubeClient *kubernetes.Clientset, objects ...runtime.Object) *FakePluginHandle {
 	informers := NewClusterInformerFactory(client, objects...)
 	return &FakePluginHandle{
-		recorder: kevents.NewFakeRecorder(100),
-		client:   client,
-		lister:   informers.Cluster().V1alpha1().PlacementDecisions().Lister(),
+		recorder:   kevents.NewFakeRecorder(100),
+		client:     client,
+		kubeClient: kubeClient,
+		lister:     informers.Cluster().V1alpha1().PlacementDecisions().Lister(),
 	}
 }
 

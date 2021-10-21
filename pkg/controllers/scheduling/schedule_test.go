@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
 
 	clusterfake "open-cluster-management.io/api/client/cluster/clientset/versioned/fake"
 	clusterapiv1 "open-cluster-management.io/api/cluster/v1"
@@ -482,7 +483,8 @@ func TestSchedule(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			c.initObjs = append(c.initObjs, c.placement)
 			clusterClient := clusterfake.NewSimpleClientset(c.initObjs...)
-			s := NewPluginScheduler(testinghelpers.NewFakePluginHandle(t, clusterClient, c.initObjs...))
+			kubeClient := &kubernetes.Clientset{}
+			s := NewPluginScheduler(testinghelpers.NewFakePluginHandle(t, clusterClient, kubeClient, c.initObjs...))
 			result, err := s.Schedule(
 				context.TODO(),
 				c.placement,

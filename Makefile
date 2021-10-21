@@ -14,7 +14,7 @@ include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
 # Image URL to use all building/pushing image targets;
 IMAGE ?= placement
 IMAGE_TAG?=latest
-IMAGE_REGISTRY ?= quay.io/open-cluster-management
+IMAGE_REGISTRY ?= quay.io/haoqing
 IMAGE_NAME?=$(IMAGE_REGISTRY)/$(IMAGE):$(IMAGE_TAG)
 KUBECTL?=kubectl
 KUSTOMIZE?=$(PWD)/$(PERMANENT_TMP_GOPATH)/bin/kustomize
