@@ -43,13 +43,22 @@ deploy-hub: ensure-kustomize
 	$(KUSTOMIZE) build deploy/hub | $(KUBECTL) apply -f -
 	mv deploy/hub/kustomization.yaml.tmp deploy/hub/kustomization.yaml
 
+deploy-webhook: ensure-kustomize
+	cp deploy/webhook/kustomization.yaml deploy/webhook/kustomization.yaml.tmp
+	cd deploy/webhook && $(KUSTOMIZE) edit set image quay.io/open-cluster-management/placement:latest=$(IMAGE_NAME)
+	$(KUSTOMIZE) build deploy/webhook | $(KUBECTL) apply -f -
+	mv deploy/webhook/kustomization.yaml.tmp deploy/webhook/kustomization.yaml
+
 undeploy-hub:
 	$(KUSTOMIZE) build deploy/hub | $(KUBECTL) delete --ignore-not-found -f -
+
+undeploy-webhook:
+	$(KUSTOMIZE) build deploy/webhook | $(KUBECTL) delete --ignore-not-found -f -
 
 build-e2e:
 	go test -c ./test/e2e -mod=vendor
 
-test-e2e: build-e2e ensure-kustomize deploy-hub
+test-e2e: build-e2e ensure-kustomize deploy-hub deploy-webhook
 	./e2e.test -test.v -ginkgo.v
 
 clean-e2e:

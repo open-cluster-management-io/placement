@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: placement-admission
+spec:
+  selector:
+    app: placement-admission
+  ports:
+  - port: 443
+    targetPort: 6443

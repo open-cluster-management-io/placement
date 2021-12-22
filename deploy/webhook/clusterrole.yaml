@@ -1,0 +1,17 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: open-cluster-management:placement-admission
+rules:
+# Allow placement admission to get/list/watch configmaps
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+# Allow placement admission to create subjectaccessreviews
+- apiGroups: ["authorization.k8s.io"]
+  resources: ["subjectaccessreviews"]
+  verbs: ["create"]
+# TODO
+- apiGroups: ["flowcontrol.apiserver.k8s.io"]
+  resources: ["flowschemas","prioritylevelconfigurations"]
+  verbs: ["get", "list", "watch"]

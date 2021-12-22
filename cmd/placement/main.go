@@ -14,6 +14,7 @@ import (
 	"k8s.io/component-base/logs"
 
 	"open-cluster-management.io/placement/pkg/cmd/hub"
+	"open-cluster-management.io/placement/pkg/cmd/webhook"
 	"open-cluster-management.io/placement/pkg/version"
 )
 
@@ -50,6 +51,7 @@ func newPlacementCommand() *cobra.Command {
 	}
 
 	cmd.AddCommand(hub.NewController())
+	cmd.AddCommand(webhook.NewAdmissionHook())
 
 	return cmd
 }
