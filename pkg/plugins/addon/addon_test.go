@@ -7,7 +7,6 @@ import (
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/runtime"
-	clusterfake "open-cluster-management.io/api/client/cluster/clientset/versioned/fake"
 	clusterapiv1 "open-cluster-management.io/api/cluster/v1"
 	clusterapiv1alpha1 "open-cluster-management.io/api/cluster/v1alpha1"
 	testinghelpers "open-cluster-management.io/placement/pkg/helpers/testing"
@@ -79,9 +78,8 @@ func TestScoreClusterWithAddOn(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			clusterClient := clusterfake.NewSimpleClientset(c.existingAddOnScores...)
 			addon := &AddOn{
-				handle:          testinghelpers.NewFakePluginHandle(t, clusterClient, c.existingAddOnScores...),
+				handle:          testinghelpers.NewFakePluginHandle(t, nil, c.existingAddOnScores...),
 				prioritizerName: "AddOn/test/score1",
 				resourceName:    "test",
 				scoreName:       "score1",

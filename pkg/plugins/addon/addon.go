@@ -2,10 +2,10 @@ package addon
 
 import (
 	"context"
-	"strings"
+	"fmt"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 	clusterapiv1 "open-cluster-management.io/api/cluster/v1"
 	clusterapiv1alpha1 "open-cluster-management.io/api/cluster/v1alpha1"
@@ -15,7 +15,9 @@ import (
 const (
 	placementLabel = clusterapiv1alpha1.PlacementLabel
 	description    = `
-	Customize prioritizer xxxxx.
+	Customize prioritizer get cluster scores from AddOnPlacementScores with sepcific
+	resource name and score name. The clusters which doesn't have corresponding 
+	AddOnPlacementScores resource or has expired score is given score 0.
 	`
 )
 
@@ -40,17 +42,18 @@ func NewAddOnPrioritizerBuilder(handle plugins.Handle) *AddOnBuilder {
 	}
 }
 
-func (c *AddOnBuilder) WithPrioritizerName(name string) *AddOnBuilder {
-	names := strings.Split(name, "/")
-	c.addOn.prioritizerName = name
-	if len(names) == 3 {
-		c.addOn.resourceName = names[1]
-		c.addOn.scoreName = names[2]
-	}
+func (c *AddOnBuilder) WithResourceName(name string) *AddOnBuilder {
+	c.addOn.resourceName = name
+	return c
+}
+
+func (c *AddOnBuilder) WithScoreName(name string) *AddOnBuilder {
+	c.addOn.scoreName = name
 	return c
 }
 
 func (c *AddOnBuilder) Build() *AddOn {
+	c.addOn.prioritizerName = "AddOn" + "/" + c.addOn.resourceName + "/" + c.addOn.scoreName
 	return c.addOn
 }
 
@@ -64,6 +67,7 @@ func (c *AddOn) Description() string {
 
 func (c *AddOn) Score(ctx context.Context, placement *clusterapiv1alpha1.Placement, clusters []*clusterapiv1.ManagedCluster) (map[string]int64, error) {
 	scores := map[string]int64{}
+	expiredScores := ""
 
 	for _, cluster := range clusters {
 		namespace := cluster.Name
@@ -71,7 +75,7 @@ func (c *AddOn) Score(ctx context.Context, placement *clusterapiv1alpha1.Placeme
 		scores[cluster.Name] = 0
 
 		// get AddOnPlacementScores CR with resourceName
-		addOnScores, err := c.handle.ClusterClient().ClusterV1alpha1().AddOnPlacementScores(namespace).Get(context.Background(), c.resourceName, metav1.GetOptions{})
+		addOnScores, err := c.handle.ScoreLister().AddOnPlacementScores(namespace).Get(c.resourceName)
 		if err != nil {
 			klog.Warningf("Getting AddOnPlacementScores failed :%s", err)
 			continue
@@ -79,7 +83,7 @@ func (c *AddOn) Score(ctx context.Context, placement *clusterapiv1alpha1.Placeme
 
 		// check socre valid time
 		if (addOnScores.Status.ValidUntil != nil) && time.Now().After(addOnScores.Status.ValidUntil.Time) {
-			klog.Warningf("AddOnPlacementScores %s ValidUntil %s exprired.", c.resourceName, addOnScores.Status.ValidUntil)
+			expiredScores = fmt.Sprintf("%s %s/%s", expiredScores, namespace, c.resourceName)
 			continue
 		}
 
@@ -89,6 +93,13 @@ func (c *AddOn) Score(ctx context.Context, placement *clusterapiv1alpha1.Placeme
 				scores[cluster.Name] = int64(v.Value)
 			}
 		}
+	}
+
+	if len(expiredScores) > 0 {
+		c.handle.EventRecorder().Eventf(
+			placement, nil, corev1.EventTypeWarning,
+			"AddOnPlacementScoresExpired", "AddOnPlacementScoresExpired",
+			"AddOnPlacementScores%s expired", expiredScores)
 	}
 
 	return scores, nil

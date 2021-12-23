@@ -23,7 +23,6 @@ const (
 	PrioritizerBalance        string = "Balance"
 	PrioritizerSteady         string = "Steady"
 	PrioritizerResourcePrefix string = "Resource"
-	PrioritizerAddOnPrefix    string = "AddOn"
 
 	ScoreCoordinateTypeBuiltIn string = "BuiltIn"
 	ScoreCoordinateTypeAddOn   string = "AddOn"
@@ -85,15 +84,17 @@ type scheduleResult struct {
 type schedulerHandler struct {
 	recorder                kevents.EventRecorder
 	placementDecisionLister clusterlisterv1alpha1.PlacementDecisionLister
+	scoreLister             clusterlisterv1alpha1.AddOnPlacementScoreLister
 	clusterClient           clusterclient.Interface
 }
 
 func NewSchedulerHandler(
-	clusterClient clusterclient.Interface, placementDecisionLister clusterlisterv1alpha1.PlacementDecisionLister, recorder kevents.EventRecorder) plugins.Handle {
+	clusterClient clusterclient.Interface, placementDecisionLister clusterlisterv1alpha1.PlacementDecisionLister, scoreLister clusterlisterv1alpha1.AddOnPlacementScoreLister, recorder kevents.EventRecorder) plugins.Handle {
 
 	return &schedulerHandler{
 		recorder:                recorder,
 		placementDecisionLister: placementDecisionLister,
+		scoreLister:             scoreLister,
 		clusterClient:           clusterClient,
 	}
 }
@@ -106,6 +107,10 @@ func (s *schedulerHandler) DecisionLister() clusterlisterv1alpha1.PlacementDecis
 	return s.placementDecisionLister
 }
 
+func (s *schedulerHandler) ScoreLister() clusterlisterv1alpha1.AddOnPlacementScoreLister {
+	return s.scoreLister
+}
+
 func (s *schedulerHandler) ClusterClient() clusterclient.Interface {
 	return s.clusterClient
 }
@@ -113,15 +118,21 @@ func (s *schedulerHandler) ClusterClient() clusterclient.Interface {
 // Initialize the default prioritizer weight.
 // Balane and Steady weight 1, others weight 0.
 // The default weight can be replaced by each placement's PrioritizerConfigs.
-var defaultPrioritizerConfig = map[string]int32{
-	PrioritizerBalance: 1,
-	PrioritizerSteady:  1,
+var defaultPrioritizerConfig = map[clusterapiv1alpha1.ScoreCoordinate]int32{
+	{
+		Type:    ScoreCoordinateTypeBuiltIn,
+		BuiltIn: PrioritizerBalance,
+	}: 1,
+	{
+		Type:    ScoreCoordinateTypeBuiltIn,
+		BuiltIn: PrioritizerSteady,
+	}: 1,
 }
 
 type pluginScheduler struct {
 	handle             plugins.Handle
 	filters            []plugins.Filter
-	prioritizerWeights map[string]int32
+	prioritizerWeights map[clusterapiv1alpha1.ScoreCoordinate]int32
 }
 
 func NewPluginScheduler(handle plugins.Handle) *pluginScheduler {
@@ -178,7 +189,7 @@ func (s *pluginScheduler) Schedule(
 	for _, cluster := range filtered {
 		scoreSum[cluster.Name] = 0
 	}
-	for _, p := range prioritizers {
+	for sc, p := range prioritizers {
 		// Get cluster score.
 		score, err := p.Score(ctx, placement, filtered)
 		if err != nil {
@@ -186,7 +197,7 @@ func (s *pluginScheduler) Schedule(
 		}
 
 		// Record prioritizer score and weight
-		weight := weights[p.Name()]
+		weight := weights[sc]
 		results.scoreRecords = append(results.scoreRecords, PrioritizerResult{Name: p.Name(), Weight: weight, Scores: score})
 
 		// The final score is a sum of each prioritizer score * weight.
@@ -249,7 +260,7 @@ func selectClusters(placement *clusterapiv1alpha1.Placement, clusters []*cluster
 // Get prioritizer weight for the placement.
 // In Additive and "" mode, will override defaultWeight with what placement has defined and return.
 // In Exact mode, will return the name and weight defined in placement.
-func getWeights(defaultWeight map[string]int32, placement *clusterapiv1alpha1.Placement) (map[string]int32, error) {
+func getWeights(defaultWeight map[clusterapiv1alpha1.ScoreCoordinate]int32, placement *clusterapiv1alpha1.Placement) (map[clusterapiv1alpha1.ScoreCoordinate]int32, error) {
 	mode := placement.Spec.PrioritizerPolicy.Mode
 	switch {
 	case mode == clusterapiv1alpha1.PrioritizerPolicyModeExact:
@@ -261,42 +272,46 @@ func getWeights(defaultWeight map[string]int32, placement *clusterapiv1alpha1.Pl
 	}
 }
 
-func mergeWeights(defaultWeight map[string]int32, customizedWeight []clusterapiv1alpha1.PrioritizerConfig) map[string]int32 {
-	weights := make(map[string]int32)
+func mergeWeights(defaultWeight map[clusterapiv1alpha1.ScoreCoordinate]int32, customizedWeight []clusterapiv1alpha1.PrioritizerConfig) map[clusterapiv1alpha1.ScoreCoordinate]int32 {
+	weights := make(map[clusterapiv1alpha1.ScoreCoordinate]int32)
 	// copy the default weight
-	for k, v := range defaultWeight {
-		weights[k] = v
+	for sc, w := range defaultWeight {
+		weights[sc] = w
 	}
-	// override the default weight
+
 	for _, c := range customizedWeight {
-		if c.ScoreCoordinate == nil {
-			weights[c.Name] = c.Weight
-		} else if c.ScoreCoordinate.Type == ScoreCoordinateTypeBuiltIn {
-			weights[c.ScoreCoordinate.BuiltIn] = c.Weight
-		} else if c.ScoreCoordinate.Type == ScoreCoordinateTypeAddOn {
-			name := PrioritizerAddOnPrefix + "/" + c.ScoreCoordinate.AddOn.ResourceName + "/" + c.ScoreCoordinate.AddOn.ScoreName
-			weights[name] = c.Weight
+		if c.ScoreCoordinate != nil {
+			weights[*c.ScoreCoordinate] = c.Weight
+		} else {
+			// override default weight
+			sc := clusterapiv1alpha1.ScoreCoordinate{
+				Type:    ScoreCoordinateTypeBuiltIn,
+				BuiltIn: c.Name,
+			}
+			weights[sc] = c.Weight
 		}
 	}
 	return weights
 }
 
 // Generate prioritizers for the placement.
-func getPrioritizers(weights map[string]int32, handle plugins.Handle) []plugins.Prioritizer {
-	result := []plugins.Prioritizer{}
+func getPrioritizers(weights map[clusterapiv1alpha1.ScoreCoordinate]int32, handle plugins.Handle) map[clusterapiv1alpha1.ScoreCoordinate]plugins.Prioritizer {
+	result := make(map[clusterapiv1alpha1.ScoreCoordinate]plugins.Prioritizer)
 	for k, v := range weights {
 		if v == 0 {
 			continue
 		}
-		switch {
-		case k == PrioritizerBalance:
-			result = append(result, balance.New(handle))
-		case k == PrioritizerSteady:
-			result = append(result, steady.New(handle))
-		case strings.HasPrefix(k, PrioritizerResourcePrefix):
-			result = append(result, resource.NewResourcePrioritizerBuilder(handle).WithPrioritizerName(k).Build())
-		case strings.HasPrefix(k, PrioritizerAddOnPrefix+"/"):
-			result = append(result, addon.NewAddOnPrioritizerBuilder(handle).WithPrioritizerName(k).Build())
+		if k.Type == ScoreCoordinateTypeBuiltIn {
+			switch {
+			case k.BuiltIn == PrioritizerBalance:
+				result[k] = balance.New(handle)
+			case k.BuiltIn == PrioritizerSteady:
+				result[k] = steady.New(handle)
+			case strings.HasPrefix(k.BuiltIn, PrioritizerResourcePrefix):
+				result[k] = resource.NewResourcePrioritizerBuilder(handle).WithPrioritizerName(k.BuiltIn).Build()
+			}
+		} else {
+			result[k] = addon.NewAddOnPrioritizerBuilder(handle).WithResourceName(k.AddOn.ResourceName).WithScoreName(k.AddOn.ScoreName).Build()
 		}
 	}
 	return result

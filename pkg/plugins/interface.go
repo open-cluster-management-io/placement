@@ -50,8 +50,11 @@ type Prioritizer interface {
 // Handle provides data and some tools that plugins can use. It is
 // passed to the plugin factories at the time of plugin initialization.
 type Handle interface {
-	// ListDecisionsInPlacment lists all decisions
+	// DecisionLister lists all decisions
 	DecisionLister() clusterlisterv1alpha1.PlacementDecisionLister
+
+	// ScoreLister lists all AddOnPlacementScores
+	ScoreLister() clusterlisterv1alpha1.AddOnPlacementScoreLister
 
 	// ClusterClient returns the cluster client
 	ClusterClient() clusterclient.Interface
