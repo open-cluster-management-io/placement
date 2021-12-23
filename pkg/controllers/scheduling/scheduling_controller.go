@@ -154,23 +154,42 @@ func NewSchedulingController(
 
 func (c *schedulingController) sync(ctx context.Context, syncCtx factory.SyncContext) error {
 	queueKey := syncCtx.QueueKey()
-	namespace, name, err := cache.SplitMetaNamespaceKey(queueKey)
-	if err != nil {
-		// ignore placement whose key is not in format: namespace/name
-		utilruntime.HandleError(err)
-		return nil
-	}
-
 	klog.V(4).Infof("Reconciling placement %q", queueKey)
-	placement, err := c.placementLister.Placements(namespace).Get(name)
-	if errors.IsNotFound(err) {
-		// no work if placement is deleted
-		return nil
-	}
-	if err != nil {
-		return err
-	}
 
+	if queueKey == "key" {
+		placements, err := c.placementLister.List(labels.Everything())
+		if err != nil {
+			return err
+		}
+
+		klog.V(4).Infof("Resyncing %d placements", len(placements))
+		for _, placement := range placements {
+			c.syncPlacement(ctx, placement)
+		}
+
+		return nil
+	} else {
+		namespace, name, err := cache.SplitMetaNamespaceKey(queueKey)
+		if err != nil {
+			// ignore placement whose key is not in format: namespace/name
+			utilruntime.HandleError(err)
+			return nil
+		}
+
+		placement, err := c.placementLister.Placements(namespace).Get(name)
+		if errors.IsNotFound(err) {
+			// no work if placement is deleted
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		return c.syncPlacement(ctx, placement)
+	}
+}
+
+func (c *schedulingController) syncPlacement(ctx context.Context, placement *clusterapiv1alpha1.Placement) error {
 	// no work if placement is deleting
 	if !placement.DeletionTimestamp.IsZero() {
 		return nil
