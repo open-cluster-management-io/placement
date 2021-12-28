@@ -81,7 +81,7 @@ func (c *AddOn) Score(ctx context.Context, placement *clusterapiv1alpha1.Placeme
 			continue
 		}
 
-		// check socre valid time
+		// check score valid time
 		if (addOnScores.Status.ValidUntil != nil) && time.Now().After(addOnScores.Status.ValidUntil.Time) {
 			expiredScores = fmt.Sprintf("%s %s/%s", expiredScores, namespace, c.resourceName)
 			continue

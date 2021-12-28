@@ -23,9 +23,6 @@ const (
 	PrioritizerBalance        string = "Balance"
 	PrioritizerSteady         string = "Steady"
 	PrioritizerResourcePrefix string = "Resource"
-
-	ScoreCoordinateTypeBuiltIn string = "BuiltIn"
-	ScoreCoordinateTypeAddOn   string = "AddOn"
 )
 
 // PrioritizerScore defines the score for each cluster
@@ -120,11 +117,11 @@ func (s *schedulerHandler) ClusterClient() clusterclient.Interface {
 // The default weight can be replaced by each placement's PrioritizerConfigs.
 var defaultPrioritizerConfig = map[clusterapiv1alpha1.ScoreCoordinate]int32{
 	{
-		Type:    ScoreCoordinateTypeBuiltIn,
+		Type:    clusterapiv1alpha1.ScoreCoordinateTypeBuiltIn,
 		BuiltIn: PrioritizerBalance,
 	}: 1,
 	{
-		Type:    ScoreCoordinateTypeBuiltIn,
+		Type:    clusterapiv1alpha1.ScoreCoordinateTypeBuiltIn,
 		BuiltIn: PrioritizerSteady,
 	}: 1,
 }
@@ -285,7 +282,7 @@ func mergeWeights(defaultWeight map[clusterapiv1alpha1.ScoreCoordinate]int32, cu
 		} else {
 			// override default weight
 			sc := clusterapiv1alpha1.ScoreCoordinate{
-				Type:    ScoreCoordinateTypeBuiltIn,
+				Type:    clusterapiv1alpha1.ScoreCoordinateTypeBuiltIn,
 				BuiltIn: c.Name,
 			}
 			weights[sc] = c.Weight
@@ -301,7 +298,7 @@ func getPrioritizers(weights map[clusterapiv1alpha1.ScoreCoordinate]int32, handl
 		if v == 0 {
 			continue
 		}
-		if k.Type == ScoreCoordinateTypeBuiltIn {
+		if k.Type == clusterapiv1alpha1.ScoreCoordinateTypeBuiltIn {
 			switch {
 			case k.BuiltIn == PrioritizerBalance:
 				result[k] = balance.New(handle)
