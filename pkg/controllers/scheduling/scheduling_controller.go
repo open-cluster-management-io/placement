@@ -43,6 +43,8 @@ const (
 	maxNumOfClusterDecisions = 100
 )
 
+var ResyncInterval = time.Minute * 5
+
 type enqueuePlacementFunc func(namespace, name string)
 
 // schedulingController schedules cluster decisions for Placements
@@ -148,7 +150,7 @@ func NewSchedulingController(
 		}, placementDecisionInformer.Informer()).
 		WithBareInformers(clusterInformer.Informer(), clusterSetInformer.Informer(), clusterSetBindingInformer.Informer()).
 		WithSync(c.sync).
-		ResyncEvery(5*time.Minute).
+		ResyncEvery(ResyncInterval).
 		ToController(schedulingControllerName, recorder)
 }
 
@@ -165,7 +167,7 @@ func (c *schedulingController) sync(ctx context.Context, syncCtx factory.SyncCon
 		for _, placement := range placements {
 			for _, config := range placement.Spec.PrioritizerPolicy.Configurations {
 				if config.ScoreCoordinate != nil && config.ScoreCoordinate.Type == clusterapiv1alpha1.ScoreCoordinateTypeAddOn {
-					key := fmt.Sprintf("%s/%s", placement.Namespace, placement.Name)
+					key, _ := cache.MetaNamespaceKeyFunc(placement)
 					klog.V(4).Infof("Requeue placement %s", key)
 					syncCtx.Queue().Add(key)
 					break
