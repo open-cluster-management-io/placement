@@ -162,9 +162,15 @@ func (c *schedulingController) sync(ctx context.Context, syncCtx factory.SyncCon
 			return err
 		}
 
-		klog.V(4).Infof("Resyncing %d placements", len(placements))
 		for _, placement := range placements {
-			c.syncPlacement(ctx, placement)
+			for _, config := range placement.Spec.PrioritizerPolicy.Configurations {
+				if config.ScoreCoordinate != nil && config.ScoreCoordinate.Type == clusterapiv1alpha1.ScoreCoordinateTypeAddOn {
+					key := fmt.Sprintf("%s/%s", placement.Namespace, placement.Name)
+					klog.V(4).Infof("Requeue placement %s", key)
+					syncCtx.Queue().Add(key)
+					break
+				}
+			}
 		}
 
 		return nil
