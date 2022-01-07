@@ -16,6 +16,7 @@ import (
 	"open-cluster-management.io/placement/pkg/plugins/predicate"
 	"open-cluster-management.io/placement/pkg/plugins/resource"
 	"open-cluster-management.io/placement/pkg/plugins/steady"
+	"open-cluster-management.io/placement/pkg/plugins/tainttoleration"
 )
 
 // PrioritizerScore defines the score for each cluster
@@ -117,6 +118,7 @@ func NewPluginScheduler(handle plugins.Handle) *pluginScheduler {
 	return &pluginScheduler{
 		filters: []plugins.Filter{
 			predicate.New(handle),
+			tainttoleration.New(handle),
 		},
 		prioritizers: []plugins.Prioritizer{
 			balance.New(handle),
