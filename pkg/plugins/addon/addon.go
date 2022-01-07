@@ -3,10 +3,10 @@ package addon
 import (
 	"context"
 	"fmt"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/clock"
 	clusterapiv1 "open-cluster-management.io/api/cluster/v1"
 	clusterapiv1alpha1 "open-cluster-management.io/api/cluster/v1alpha1"
 	"open-cluster-management.io/placement/pkg/plugins"
@@ -22,6 +22,7 @@ const (
 )
 
 var _ plugins.Prioritizer = &AddOn{}
+var AddOnClock = (clock.Clock)(clock.RealClock{})
 
 type AddOn struct {
 	handle          plugins.Handle
@@ -82,7 +83,7 @@ func (c *AddOn) Score(ctx context.Context, placement *clusterapiv1alpha1.Placeme
 		}
 
 		// check score valid time
-		if (addOnScores.Status.ValidUntil != nil) && time.Now().After(addOnScores.Status.ValidUntil.Time) {
+		if (addOnScores.Status.ValidUntil != nil) && AddOnClock.Now().After(addOnScores.Status.ValidUntil.Time) {
 			expiredScores = fmt.Sprintf("%s %s/%s", expiredScores, namespace, c.resourceName)
 			continue
 		}
@@ -95,6 +96,7 @@ func (c *AddOn) Score(ctx context.Context, placement *clusterapiv1alpha1.Placeme
 		}
 	}
 
+	//TODO: show the failure in placement.status conditions
 	if len(expiredScores) > 0 {
 		c.handle.EventRecorder().Eventf(
 			placement, nil, corev1.EventTypeWarning,

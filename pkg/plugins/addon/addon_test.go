@@ -7,10 +7,14 @@ import (
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/runtime"
+	testingclock "k8s.io/utils/clock/testing"
 	clusterapiv1 "open-cluster-management.io/api/cluster/v1"
 	clusterapiv1alpha1 "open-cluster-management.io/api/cluster/v1alpha1"
 	testinghelpers "open-cluster-management.io/placement/pkg/helpers/testing"
 )
+
+var fakeTime = time.Date(2022, time.January, 01, 0, 0, 0, 0, time.UTC)
+var expiredTime = fakeTime.Add(-30 * time.Second)
 
 func TestScoreClusterWithAddOn(t *testing.T) {
 	cases := []struct {
@@ -53,7 +57,7 @@ func TestScoreClusterWithAddOn(t *testing.T) {
 				testinghelpers.NewManagedCluster("cluster3").Build(),
 			},
 			existingAddOnScores: []runtime.Object{
-				testinghelpers.NewAddOnPlacementScore("cluster1", "test").WithScore("score1", 30).WithValidUntil(time.Now().Add(-10 * time.Second)).Build(),
+				testinghelpers.NewAddOnPlacementScore("cluster1", "test").WithScore("score1", 30).WithValidUntil(expiredTime).Build(),
 				testinghelpers.NewAddOnPlacementScore("cluster2", "test").WithScore("score1", 40).Build(),
 				testinghelpers.NewAddOnPlacementScore("cluster3", "test").WithScore("score1", 50).Build(),
 			},
@@ -76,6 +80,7 @@ func TestScoreClusterWithAddOn(t *testing.T) {
 		},
 	}
 
+	AddOnClock = testingclock.NewFakeClock(fakeTime)
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			addon := &AddOn{

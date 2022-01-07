@@ -20,9 +20,10 @@ import (
 )
 
 const (
-	PrioritizerBalance        string = "Balance"
-	PrioritizerSteady         string = "Steady"
-	PrioritizerResourcePrefix string = "Resource"
+	PrioritizerBalance                   string = "Balance"
+	PrioritizerSteady                    string = "Steady"
+	PrioritizerResourceAllocatableCPU    string = "ResourceAllocatableCPU"
+	PrioritizerResourceAllocatableMemory string = "ResourceAllocatableMemory"
 )
 
 // PrioritizerScore defines the score for each cluster
@@ -179,7 +180,10 @@ func (s *pluginScheduler) Schedule(
 	}
 
 	// 2. Generate prioritizers for each placement whose weight != 0.
-	prioritizers := getPrioritizers(weights, s.handle)
+	prioritizers, err := getPrioritizers(weights, s.handle)
+	if err != nil {
+		return nil, err
+	}
 
 	// 3. Calculate clusters scores.
 	scoreSum := PrioritizerScore{}
@@ -276,11 +280,12 @@ func mergeWeights(defaultWeight map[clusterapiv1alpha1.ScoreCoordinate]int32, cu
 		weights[sc] = w
 	}
 
+	// override default weight
 	for _, c := range customizedWeight {
 		if c.ScoreCoordinate != nil {
 			weights[*c.ScoreCoordinate] = c.Weight
 		} else {
-			// override default weight
+			// Keep compatibility for pre-existing data which doesn't have scorecoordinate field.
 			sc := clusterapiv1alpha1.ScoreCoordinate{
 				Type:    clusterapiv1alpha1.ScoreCoordinateTypeBuiltIn,
 				BuiltIn: c.Name,
@@ -292,7 +297,7 @@ func mergeWeights(defaultWeight map[clusterapiv1alpha1.ScoreCoordinate]int32, cu
 }
 
 // Generate prioritizers for the placement.
-func getPrioritizers(weights map[clusterapiv1alpha1.ScoreCoordinate]int32, handle plugins.Handle) map[clusterapiv1alpha1.ScoreCoordinate]plugins.Prioritizer {
+func getPrioritizers(weights map[clusterapiv1alpha1.ScoreCoordinate]int32, handle plugins.Handle) (map[clusterapiv1alpha1.ScoreCoordinate]plugins.Prioritizer, error) {
 	result := make(map[clusterapiv1alpha1.ScoreCoordinate]plugins.Prioritizer)
 	for k, v := range weights {
 		if v == 0 {
@@ -304,14 +309,21 @@ func getPrioritizers(weights map[clusterapiv1alpha1.ScoreCoordinate]int32, handl
 				result[k] = balance.New(handle)
 			case k.BuiltIn == PrioritizerSteady:
 				result[k] = steady.New(handle)
-			case strings.HasPrefix(k.BuiltIn, PrioritizerResourcePrefix):
+			case k.BuiltIn == PrioritizerResourceAllocatableCPU || k.BuiltIn == PrioritizerResourceAllocatableMemory:
 				result[k] = resource.NewResourcePrioritizerBuilder(handle).WithPrioritizerName(k.BuiltIn).Build()
+			default:
+				//TODO: show the failure in placement.status conditions
+				return nil, fmt.Errorf("incorrect builtin prioritizer: %s", k.BuiltIn)
 			}
 		} else {
+			if k.AddOn == nil {
+				//TODO: show the failure in placement.status conditions
+				return nil, fmt.Errorf("addOn should not be empty")
+			}
 			result[k] = addon.NewAddOnPrioritizerBuilder(handle).WithResourceName(k.AddOn.ResourceName).WithScoreName(k.AddOn.ScoreName).Build()
 		}
 	}
-	return result
+	return result, nil
 }
 
 func (r *scheduleResult) FilterResults() []FilterResult {

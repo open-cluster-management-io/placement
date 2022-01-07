@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/openshift/library-go/pkg/controller/factory"
 	"github.com/openshift/library-go/pkg/operator/events"
@@ -42,8 +41,6 @@ const (
 	schedulingControllerName = "SchedulingController"
 	maxNumOfClusterDecisions = 100
 )
-
-var ResyncInterval = time.Minute * 5
 
 type enqueuePlacementFunc func(namespace, name string)
 
@@ -150,7 +147,6 @@ func NewSchedulingController(
 		}, placementDecisionInformer.Informer()).
 		WithBareInformers(clusterInformer.Informer(), clusterSetInformer.Informer(), clusterSetBindingInformer.Informer()).
 		WithSync(c.sync).
-		ResyncEvery(ResyncInterval).
 		ToController(schedulingControllerName, recorder)
 }
 
@@ -158,43 +154,23 @@ func (c *schedulingController) sync(ctx context.Context, syncCtx factory.SyncCon
 	queueKey := syncCtx.QueueKey()
 	klog.V(4).Infof("Reconciling placement %q", queueKey)
 
-	if queueKey == "key" {
-		placements, err := c.placementLister.List(labels.Everything())
-		if err != nil {
-			return err
-		}
-
-		for _, placement := range placements {
-			for _, config := range placement.Spec.PrioritizerPolicy.Configurations {
-				if config.ScoreCoordinate != nil && config.ScoreCoordinate.Type == clusterapiv1alpha1.ScoreCoordinateTypeAddOn {
-					key, _ := cache.MetaNamespaceKeyFunc(placement)
-					klog.V(4).Infof("Requeue placement %s", key)
-					syncCtx.Queue().Add(key)
-					break
-				}
-			}
-		}
-
+	namespace, name, err := cache.SplitMetaNamespaceKey(queueKey)
+	if err != nil {
+		// ignore placement whose key is not in format: namespace/name
+		utilruntime.HandleError(err)
 		return nil
-	} else {
-		namespace, name, err := cache.SplitMetaNamespaceKey(queueKey)
-		if err != nil {
-			// ignore placement whose key is not in format: namespace/name
-			utilruntime.HandleError(err)
-			return nil
-		}
-
-		placement, err := c.placementLister.Placements(namespace).Get(name)
-		if errors.IsNotFound(err) {
-			// no work if placement is deleted
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-
-		return c.syncPlacement(ctx, placement)
 	}
+
+	placement, err := c.placementLister.Placements(namespace).Get(name)
+	if errors.IsNotFound(err) {
+		// no work if placement is deleted
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	return c.syncPlacement(ctx, placement)
 }
 
 func (c *schedulingController) syncPlacement(ctx context.Context, placement *clusterapiv1alpha1.Placement) error {
