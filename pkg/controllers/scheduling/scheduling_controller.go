@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/openshift/library-go/pkg/controller/factory"
 	"github.com/openshift/library-go/pkg/operator/events"
@@ -20,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
 	cache "k8s.io/client-go/tools/cache"
 	kevents "k8s.io/client-go/tools/events"
 	"k8s.io/klog/v2"
@@ -54,6 +56,7 @@ type schedulingController struct {
 	placementLister         clusterlisterv1alpha1.PlacementLister
 	placementDecisionLister clusterlisterv1alpha1.PlacementDecisionLister
 	enqueuePlacementFunc    enqueuePlacementFunc
+	controller              factory.Controller
 	scheduler               Scheduler
 	recorder                kevents.EventRecorder
 }
@@ -68,7 +71,7 @@ func NewSchedulingController(
 	placementDecisionInformer clusterinformerv1alpha1.PlacementDecisionInformer,
 	scheduler Scheduler,
 	recorder events.Recorder, krecorder kevents.EventRecorder,
-) factory.Controller {
+) *schedulingController {
 	syncCtx := factory.NewSyncContext(schedulingControllerName, recorder)
 	enqueuePlacementFunc := func(namespace, name string) {
 		syncCtx.Queue().Add(fmt.Sprintf("%s/%s", namespace, name))
@@ -124,7 +127,7 @@ func NewSchedulingController(
 		enqueuePlacementFunc: enqueuePlacementFunc,
 	})
 
-	return factory.New().
+	c.controller = factory.New().
 		WithSyncContext(syncCtx).
 		WithInformersQueueKeyFunc(func(obj runtime.Object) string {
 			key, _ := cache.MetaNamespaceKeyFunc(obj)
@@ -149,6 +152,35 @@ func NewSchedulingController(
 		WithBareInformers(clusterInformer.Informer(), clusterSetInformer.Informer(), clusterSetBindingInformer.Informer()).
 		WithSync(c.sync).
 		ToController(schedulingControllerName, recorder)
+
+	return c
+}
+
+// Controller return the factory.Controller
+func (c *schedulingController) Controller() factory.Controller {
+	return c.controller
+}
+
+// Resync the placement which depends on AddOnPlacementScore periodically
+func (c *schedulingController) Resync(interval time.Duration, ctx context.Context) {
+	wait.Until(func() {
+		placements, err := c.placementLister.List(labels.Everything())
+		if err != nil {
+			utilruntime.HandleError(err)
+			return
+		}
+
+		for _, placement := range placements {
+			for _, config := range placement.Spec.PrioritizerPolicy.Configurations {
+				if config.ScoreCoordinate != nil && config.ScoreCoordinate.Type == clusterapiv1alpha1.ScoreCoordinateTypeAddOn {
+					klog.V(4).Infof("Resync placement %s/%s", placement.Namespace, placement.Name)
+					c.syncPlacement(ctx, placement)
+					break
+				}
+			}
+		}
+
+	}, interval, ctx.Done())
 }
 
 func (c *schedulingController) sync(ctx context.Context, syncCtx factory.SyncContext) error {
