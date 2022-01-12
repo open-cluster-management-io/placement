@@ -16,6 +16,7 @@ import (
 	clusterv1client "open-cluster-management.io/api/client/cluster/clientset/versioned"
 	clusterapiv1alpha1 "open-cluster-management.io/api/cluster/v1alpha1"
 	controllers "open-cluster-management.io/placement/pkg/controllers"
+	scheduling "open-cluster-management.io/placement/pkg/controllers/scheduling"
 	"open-cluster-management.io/placement/test/integration/util"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 )
@@ -80,8 +81,8 @@ func BenchmarkSchedulePlacements100000(b *testing.B) {
 
 func benchmarkSchedulePlacements(b *testing.B, num int) {
 	var err error
-	ctx, _ := context.WithCancel(context.Background())
-	controllers.ResyncInterval = time.Second * 5
+	ctx, cancel := context.WithCancel(context.Background())
+	scheduling.ResyncInterval = time.Second * 5
 
 	// start a kube-apiserver
 	testEnv := &envtest.Environment{
@@ -111,7 +112,8 @@ func benchmarkSchedulePlacements(b *testing.B, num int) {
 	})
 
 	go createPlacements(num)
-	assertPlacements(num)
+	assertPlacements(num, cancel)
+
 }
 
 func createNamespace(namespace string) {
@@ -136,7 +138,7 @@ func createPlacements(num int) {
 	}
 }
 
-func assertPlacements(num int) {
+func assertPlacements(num int, cancel context.CancelFunc) {
 	for {
 		actualNum := 0
 		placements, _ := clusterClient.ClusterV1alpha1().Placements(namespace).List(context.Background(), metav1.ListOptions{})
@@ -146,6 +148,9 @@ func assertPlacements(num int) {
 			}
 		}
 		if actualNum == num {
+			if cancel != nil {
+				cancel()
+			}
 			return
 		}
 		time.Sleep(1 * time.Second)

@@ -16,8 +16,6 @@ import (
 	"open-cluster-management.io/placement/pkg/debugger"
 )
 
-var ResyncInterval = time.Minute * 5
-
 // RunControllerManager starts the controllers on hub to make placement decisions.
 func RunControllerManager(ctx context.Context, controllerContext *controllercmd.ControllerContext) error {
 	clusterClient, err := clusterclient.NewForConfig(controllerContext.KubeConfig)
@@ -67,10 +65,21 @@ func RunControllerManager(ctx context.Context, controllerContext *controllercmd.
 		controllerContext.EventRecorder, recorder,
 	)
 
+	schedulingControllerResync := scheduling.NewSchedulingControllerResync(
+		clusterClient,
+		clusterInformers.Cluster().V1().ManagedClusters(),
+		clusterInformers.Cluster().V1beta1().ManagedClusterSets(),
+		clusterInformers.Cluster().V1beta1().ManagedClusterSetBindings(),
+		clusterInformers.Cluster().V1alpha1().Placements(),
+		clusterInformers.Cluster().V1alpha1().PlacementDecisions(),
+		scheduler,
+		controllerContext.EventRecorder, recorder,
+	)
+
 	go clusterInformers.Start(ctx.Done())
 
-	go schedulingController.Controller().Run(ctx, 1)
-	go schedulingController.Resync(ResyncInterval, ctx)
+	go schedulingController.Run(ctx, 1)
+	go schedulingControllerResync.Run(ctx, 1)
 
 	<-ctx.Done()
 	return nil
