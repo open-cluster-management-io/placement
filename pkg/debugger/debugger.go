@@ -60,7 +60,8 @@ func (d *Debugger) Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	scheduleResults, _ := d.scheduler.Schedule(r.Context(), placement, clusters)
+	schedulePrioritizers, _ := d.scheduler.PrePare(r.Context(), placement)
+	scheduleResults, _ := d.scheduler.Schedule(r.Context(), placement, clusters, schedulePrioritizers)
 
 	result := DebugResult{FilterResults: scheduleResults.FilterResults(), PrioritizeResults: scheduleResults.PrioritizerResults()}
 

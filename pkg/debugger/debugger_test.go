@@ -48,9 +48,16 @@ func (r *testResult) NumOfUnscheduled() int {
 	return 0
 }
 
+func (s *testScheduler) PrePare(ctx context.Context,
+	placement *clusterapiv1beta1.Placement,
+) (scheduling.SchedulePrioritizers, error) {
+	return nil, nil
+}
+
 func (s *testScheduler) Schedule(ctx context.Context,
 	placement *clusterapiv1beta1.Placement,
 	clusters []*clusterapiv1.ManagedCluster,
+	schedulePrioritizers scheduling.SchedulePrioritizers,
 ) (scheduling.ScheduleResult, error) {
 	return s.result, nil
 }

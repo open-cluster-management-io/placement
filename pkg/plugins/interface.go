@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/events"
 	clusterclient "open-cluster-management.io/api/client/cluster/clientset/versioned"
 	clusterlisterv1alpha1 "open-cluster-management.io/api/client/cluster/listers/cluster/v1alpha1"
@@ -45,7 +46,7 @@ type Prioritizer interface {
 
 	// Score gives the score to a list of the clusters, it returns a map with the key as
 	// the cluster name.
-	Score(ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) (map[string]int64, error)
+	Score(ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) (map[string]int64, *metav1.Condition, error)
 }
 
 // Handle provides data and some tools that plugins can use. It is

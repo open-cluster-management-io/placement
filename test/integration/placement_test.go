@@ -174,14 +174,22 @@ var _ = ginkgo.Describe("Placement", func() {
 		}, eventuallyTimeout*2, eventuallyInterval).Should(gomega.BeTrue())
 	}
 
-	assertPlacementStatus := func(placementName string, numOfSelectedClusters int, satisfied bool) {
+	assertPlacementStatus := func(placementName string, numOfSelectedClusters int, expiredAddOnScores bool, satisfied bool) {
 		ginkgo.By("Check the status of placement")
 		gomega.Eventually(func() bool {
 			placement, err := clusterClient.ClusterV1beta1().Placements(namespace).Get(context.Background(), placementName, metav1.GetOptions{})
 			if err != nil {
 				return false
 			}
-			if satisfied && !util.HasCondition(
+			if expiredAddOnScores && !util.HasCondition(
+				placement.Status.Conditions,
+				clusterapiv1beta1.PlacementConditionSatisfied,
+				"AddOnPlacementScoresExpired",
+				metav1.ConditionFalse,
+			) {
+				return false
+			}
+			if !expiredAddOnScores && satisfied && !util.HasCondition(
 				placement.Status.Conditions,
 				clusterapiv1beta1.PlacementConditionSatisfied,
 				"AllDecisionsScheduled",
@@ -189,7 +197,7 @@ var _ = ginkgo.Describe("Placement", func() {
 			) {
 				return false
 			}
-			if !satisfied && !util.HasCondition(
+			if !expiredAddOnScores && !satisfied && !util.HasCondition(
 				placement.Status.Conditions,
 				clusterapiv1beta1.PlacementConditionSatisfied,
 				"NotAllDecisionsScheduled",
@@ -377,7 +385,7 @@ var _ = ginkgo.Describe("Placement", func() {
 		assertPlacementDecisionCreated(placement)
 		assertNumberOfDecisions(placementName, nod)
 		if noc != nil {
-			assertPlacementStatus(placementName, nod, nod == int(*noc))
+			assertPlacementStatus(placementName, nod, false, nod == int(*noc))
 		}
 	}
 
@@ -509,7 +517,7 @@ var _ = ginkgo.Describe("Placement", func() {
 
 			nod := int(noc)
 			assertNumberOfDecisions(placementName, nod)
-			assertPlacementStatus(placementName, nod, true)
+			assertPlacementStatus(placementName, nod, false, true)
 		})
 
 		ginkgo.It("Should schedule successfully once spec.NumberOfClusters is increased", func() {
@@ -527,7 +535,7 @@ var _ = ginkgo.Describe("Placement", func() {
 
 			nod := int(noc)
 			assertNumberOfDecisions(placementName, nod)
-			assertPlacementStatus(placementName, nod, true)
+			assertPlacementStatus(placementName, nod, false, true)
 		})
 
 		ginkgo.It("Should be satisfied once new clusters are added", func() {
@@ -540,7 +548,7 @@ var _ = ginkgo.Describe("Placement", func() {
 
 			nod := 10
 			assertNumberOfDecisions(placementName, nod)
-			assertPlacementStatus(placementName, nod, true)
+			assertPlacementStatus(placementName, nod, false, true)
 		})
 
 		ginkgo.It("Should schedule successfully once new clusterset is bound", func() {
@@ -554,7 +562,7 @@ var _ = ginkgo.Describe("Placement", func() {
 
 			nod := 8
 			assertNumberOfDecisions(placementName, nod)
-			assertPlacementStatus(placementName, nod, false)
+			assertPlacementStatus(placementName, nod, false, false)
 		})
 
 		ginkgo.It("Should create multiple placementdecisions once scheduled", func() {
@@ -564,7 +572,7 @@ var _ = ginkgo.Describe("Placement", func() {
 
 			nod := 101
 			assertNumberOfDecisions(placementName, nod)
-			assertPlacementStatus(placementName, nod, true)
+			assertPlacementStatus(placementName, nod, false, true)
 		})
 
 		ginkgo.It("Should schedule successfully with default SchedulePolicy", func() {
@@ -711,6 +719,7 @@ var _ = ginkgo.Describe("Placement", func() {
 
 			//Checking the result of the placement when no AddOnPlacementScores
 			assertClusterNamesOfDecisions(placementName, []string{clusterNames[0], clusterNames[1]})
+			assertPlacementStatus(placementName, 2, false, true)
 
 			//Creating the AddOnPlacementScores
 			assertCreatingAddOnPlacementScores(clusterNames[0], "demo", "demo", 80)
@@ -719,6 +728,9 @@ var _ = ginkgo.Describe("Placement", func() {
 
 			//Checking the result of the placement when AddOnPlacementScores added
 			assertClusterNamesOfDecisions(placementName, []string{clusterNames[1], clusterNames[2]})
+			assertPlacementStatus(placementName, 2, false, true)
+			time.Sleep(11 * time.Second)
+			assertPlacementStatus(placementName, 2, true, false)
 
 			//update the AddOnPlacementScores
 			assertCreatingAddOnPlacementScores(clusterNames[0], "demo", "demo", 100)
@@ -727,6 +739,7 @@ var _ = ginkgo.Describe("Placement", func() {
 
 			//Checking the result of the placement when AddOnPlacementScores updated
 			assertClusterNamesOfDecisions(placementName, []string{clusterNames[0], clusterNames[2]})
+			assertPlacementStatus(placementName, 2, false, true)
 
 		})
 
@@ -858,7 +871,7 @@ var _ = ginkgo.Describe("Placement", func() {
 			assertCreatingPlacement(placementName, noc(10), 5, clusterapiv1beta1.PrioritizerPolicy{})
 
 			assertNumberOfDecisions(placementName, 5)
-			assertPlacementStatus(placementName, 5, false)
+			assertPlacementStatus(placementName, 5, false, false)
 
 			ginkgo.By("Delete the clusterset")
 			assertDeletingClusterSet(clusterSet1Name)
@@ -869,7 +882,7 @@ var _ = ginkgo.Describe("Placement", func() {
 			assertCreatingClusterSet(clusterSet1Name)
 
 			assertNumberOfDecisions(placementName, 5)
-			assertPlacementStatus(placementName, 5, false)
+			assertPlacementStatus(placementName, 5, false, false)
 		})
 
 		ginkgo.It("Should re-schedule successfully once a clustersetbinding deleted/added", func() {
@@ -878,7 +891,7 @@ var _ = ginkgo.Describe("Placement", func() {
 			assertCreatingPlacement(placementName, noc(10), 5, clusterapiv1beta1.PrioritizerPolicy{})
 
 			assertNumberOfDecisions(placementName, 5)
-			assertPlacementStatus(placementName, 5, false)
+			assertPlacementStatus(placementName, 5, false, false)
 
 			ginkgo.By("Delete the clustersetbinding")
 			assertDeletingClusterSetBinding(clusterSet1Name)
@@ -889,7 +902,7 @@ var _ = ginkgo.Describe("Placement", func() {
 			assertCreatingClusterSetBinding(clusterSet1Name)
 
 			assertNumberOfDecisions(placementName, 5)
-			assertPlacementStatus(placementName, 5, false)
+			assertPlacementStatus(placementName, 5, false, false)
 		})
 	})
 })

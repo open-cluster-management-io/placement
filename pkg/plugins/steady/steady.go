@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -41,21 +42,20 @@ func (s *Steady) Description() string {
 	return description
 }
 
-func (s *Steady) Score(
-	ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) (map[string]int64, error) {
+func (s *Steady) Score(ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) (map[string]int64, *metav1.Condition, error) {
 	// query placementdecisions with label selector
 	scores := map[string]int64{}
 	requirement, err := labels.NewRequirement(placementLabel, selection.Equals, []string{placement.Name})
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	labelSelector := labels.NewSelector().Add(*requirement)
 	decisions, err := s.handle.DecisionLister().PlacementDecisions(placement.Namespace).List(labelSelector)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	existingDecisions := sets.String{}
@@ -73,5 +73,5 @@ func (s *Steady) Score(
 		}
 	}
 
-	return scores, nil
+	return scores, nil, nil
 }

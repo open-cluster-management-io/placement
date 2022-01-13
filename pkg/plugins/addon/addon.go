@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 	clusterapiv1 "open-cluster-management.io/api/cluster/v1"
@@ -66,7 +66,7 @@ func (c *AddOn) Description() string {
 	return description
 }
 
-func (c *AddOn) Score(ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) (map[string]int64, error) {
+func (c *AddOn) Score(ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) (map[string]int64, *metav1.Condition, error) {
 	scores := map[string]int64{}
 	expiredScores := ""
 
@@ -96,13 +96,14 @@ func (c *AddOn) Score(ctx context.Context, placement *clusterapiv1beta1.Placemen
 		}
 	}
 
-	//TODO: show the failure in placement.status conditions
+	//show the failure in placement.status conditions
 	if len(expiredScores) > 0 {
-		c.handle.EventRecorder().Eventf(
-			placement, nil, corev1.EventTypeWarning,
-			"AddOnPlacementScoresExpired", "AddOnPlacementScoresExpired",
-			"AddOnPlacementScores%s expired", expiredScores)
+		condition := &metav1.Condition{
+			Reason:  "AddOnPlacementScoresExpired",
+			Message: fmt.Sprintf("AddOnPlacementScores%s expired", expiredScores),
+		}
+		return scores, condition, nil
 	}
 
-	return scores, nil
+	return scores, nil, nil
 }

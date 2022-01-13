@@ -23,9 +23,16 @@ type testScheduler struct {
 	result ScheduleResult
 }
 
+func (s *testScheduler) PrePare(ctx context.Context,
+	placement *clusterapiv1beta1.Placement,
+) (SchedulePrioritizers, error) {
+	return nil, nil
+}
+
 func (s *testScheduler) Schedule(ctx context.Context,
 	placement *clusterapiv1beta1.Placement,
 	clusters []*clusterapiv1.ManagedCluster,
+	schedulePrioritizers SchedulePrioritizers,
 ) (ScheduleResult, error) {
 	return s.result, nil
 }
@@ -44,6 +51,11 @@ func TestSchedulingController_sync(t *testing.T) {
 		{
 			name:      "placement satisfied",
 			placement: testinghelpers.NewPlacement(placementNamespace, placementName).Build(),
+			initObjs: []runtime.Object{
+				testinghelpers.NewClusterSet("clusterset1"),
+				testinghelpers.NewClusterSetBinding(placementNamespace, "clusterset1"),
+				testinghelpers.NewManagedCluster("cluster1").WithLabel(clusterSetLabel, "clusterset1").Build(),
+			},
 			scheduleResult: &scheduleResult{
 				feasibleClusters: []*clusterapiv1.ManagedCluster{
 					testinghelpers.NewManagedCluster("cluster1").Build(),
@@ -70,12 +82,24 @@ func TestSchedulingController_sync(t *testing.T) {
 				if placement.Status.NumberOfSelectedClusters != int32(3) {
 					t.Errorf("expecte %d cluster selected, but got %d", 3, placement.Status.NumberOfSelectedClusters)
 				}
-				testinghelpers.HasCondition(
+				ok = testinghelpers.HasCondition(
 					placement.Status.Conditions,
 					clusterapiv1beta1.PlacementConditionSatisfied,
 					"AllDecisionsScheduled",
 					metav1.ConditionTrue,
 				)
+				if !ok {
+					t.Errorf("unexpected condition %v", placement.Status.Conditions)
+				}
+				ok = testinghelpers.HasCondition(
+					placement.Status.Conditions,
+					"PlacementMisconfigured",
+					"CorrectConfiguration",
+					metav1.ConditionFalse,
+				)
+				if !ok {
+					t.Errorf("unexpected condition %v", placement.Status.Conditions)
+				}
 			},
 		},
 		{
@@ -112,12 +136,15 @@ func TestSchedulingController_sync(t *testing.T) {
 				if placement.Status.NumberOfSelectedClusters != int32(3) {
 					t.Errorf("expecte %d cluster selected, but got %d", 3, placement.Status.NumberOfSelectedClusters)
 				}
-				testinghelpers.HasCondition(
+				ok = testinghelpers.HasCondition(
 					placement.Status.Conditions,
 					clusterapiv1beta1.PlacementConditionSatisfied,
 					"NotAllDecisionsScheduled",
 					metav1.ConditionFalse,
 				)
+				if !ok {
+					t.Errorf("unexpected condition %v", placement.Status.Conditions)
+				}
 			},
 		},
 		{
@@ -141,18 +168,21 @@ func TestSchedulingController_sync(t *testing.T) {
 				if placement.Status.NumberOfSelectedClusters != int32(0) {
 					t.Errorf("expecte %d cluster selected, but got %d", 0, placement.Status.NumberOfSelectedClusters)
 				}
-				testinghelpers.HasCondition(
+				ok = testinghelpers.HasCondition(
 					placement.Status.Conditions,
 					clusterapiv1beta1.PlacementConditionSatisfied,
 					"NoManagedClusterSetBindings",
 					metav1.ConditionFalse,
 				)
+				if !ok {
+					t.Errorf("unexpected condition %v", placement.Status.Conditions)
+				}
 			},
 		},
 		{
 			name: "placement status not changed",
 			placement: testinghelpers.NewPlacement(placementNamespace, placementName).
-				WithNumOfSelectedClusters(3).WithSatisfiedCondition(3, 0).Build(),
+				WithNumOfSelectedClusters(3).WithSatisfiedCondition(3, 0).WithMisconfiguredCondition("").Build(),
 			initObjs: []runtime.Object{
 				testinghelpers.NewClusterSet("clusterset1"),
 				testinghelpers.NewClusterSetBinding(placementNamespace, "clusterset1"),
@@ -201,7 +231,6 @@ func TestSchedulingController_sync(t *testing.T) {
 			if syncErr != nil {
 				t.Errorf("unexpected err: %v", syncErr)
 			}
-
 			c.validateActions(t, clusterClient.Actions())
 		})
 	}
@@ -399,6 +428,7 @@ func TestNewSatisfiedCondition(t *testing.T) {
 				c.numOfAvailableClusters,
 				c.numOfFeasibleClusters,
 				c.numOfUnscheduledDecisions,
+				nil,
 			)
 
 			if condition.Status != c.expectedStatus {

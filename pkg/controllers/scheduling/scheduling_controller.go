@@ -277,8 +277,14 @@ func (c *schedulingController) syncPlacement(ctx context.Context, placement *clu
 		return err
 	}
 
+	// check placement configuration and generate schedule prioritizers
+	schedulePrioritizers, err := c.scheduler.PrePare(ctx, placement)
+	if err != nil {
+		return c.updateStatus(ctx, placement, clusterSetNames, len(bindings), len(clusters), nil, err)
+	}
+
 	// schedule placement with scheduler
-	scheduleResult, err := c.scheduler.Schedule(ctx, placement, clusters)
+	scheduleResult, err := c.scheduler.Schedule(ctx, placement, clusters, schedulePrioritizers)
 	if err != nil {
 		return err
 	}
@@ -289,7 +295,7 @@ func (c *schedulingController) syncPlacement(ctx context.Context, placement *clu
 	}
 
 	// update placement status if necessary to signal no bindings
-	return c.updateStatus(ctx, placement, clusterSetNames, len(bindings), len(clusters), scheduleResult)
+	return c.updateStatus(ctx, placement, clusterSetNames, len(bindings), len(clusters), scheduleResult, nil)
 }
 
 // getManagedClusterSetBindings returns all bindings found in the placement namespace.
@@ -360,20 +366,38 @@ func (c *schedulingController) updateStatus(
 	numOfBindings,
 	numOfAvailableClusters int,
 	scheduleResult ScheduleResult,
+	scheduleConfigMessage error,
 ) error {
 	newPlacement := placement.DeepCopy()
-	newPlacement.Status.NumberOfSelectedClusters = int32(len(scheduleResult.Decisions()))
 
-	satisfiedCondition := newSatisfiedCondition(
-		placement.Spec.ClusterSets,
-		eligibleClusterSetNames,
-		numOfBindings,
-		numOfAvailableClusters,
-		len(scheduleResult.Decisions()),
-		scheduleResult.NumOfUnscheduled(),
-	)
+	// update configuration condition
+	misconfiguredCondition := newMisconfiguredCondition(scheduleConfigMessage)
+	meta.SetStatusCondition(&newPlacement.Status.Conditions, misconfiguredCondition)
 
-	meta.SetStatusCondition(&newPlacement.Status.Conditions, satisfiedCondition)
+	// update satisfiedCondition if has scheduleResult
+	if scheduleResult != nil {
+		newPlacement.Status.NumberOfSelectedClusters = int32(len(scheduleResult.Decisions()))
+
+		var prioritizerCondition *metav1.Condition
+		for _, prioritizerResults := range scheduleResult.PrioritizerResults() {
+			if prioritizerResults.Condition != nil {
+				prioritizerCondition = prioritizerResults.Condition
+				break
+			}
+		}
+
+		satisfiedCondition := newSatisfiedCondition(
+			placement.Spec.ClusterSets,
+			eligibleClusterSetNames,
+			numOfBindings,
+			numOfAvailableClusters,
+			len(scheduleResult.Decisions()),
+			scheduleResult.NumOfUnscheduled(),
+			prioritizerCondition,
+		)
+		meta.SetStatusCondition(&newPlacement.Status.Conditions, satisfiedCondition)
+	}
+
 	if reflect.DeepEqual(newPlacement.Status, placement.Status) {
 		return nil
 	}
@@ -389,6 +413,7 @@ func newSatisfiedCondition(
 	numOfAvailableClusters,
 	numOfFeasibleClusters,
 	numOfUnscheduledDecisions int,
+	prioritizerCondition *metav1.Condition,
 ) metav1.Condition {
 	condition := metav1.Condition{
 		Type: clusterapiv1beta1.PlacementConditionSatisfied,
@@ -410,6 +435,10 @@ func newSatisfiedCondition(
 		condition.Status = metav1.ConditionFalse
 		condition.Reason = "NoManagedClusterMatched"
 		condition.Message = "No ManagedCluster matches any of the cluster predicate"
+	case prioritizerCondition != nil:
+		condition.Status = metav1.ConditionFalse
+		condition.Reason = prioritizerCondition.Reason
+		condition.Message = prioritizerCondition.Message
 	case numOfUnscheduledDecisions == 0:
 		condition.Status = metav1.ConditionTrue
 		condition.Reason = "AllDecisionsScheduled"
@@ -418,6 +447,23 @@ func newSatisfiedCondition(
 		condition.Status = metav1.ConditionFalse
 		condition.Reason = "NotAllDecisionsScheduled"
 		condition.Message = fmt.Sprintf("%d cluster decisions unscheduled", numOfUnscheduledDecisions)
+	}
+	return condition
+}
+
+// newMisconfiguredCondition returns a new condition with type PlacementConditionMisconfigured
+func newMisconfiguredCondition(err error) metav1.Condition {
+	condition := metav1.Condition{
+		Type: clusterapiv1beta1.PlacementConditionMisconfigured,
+	}
+	if err != nil {
+		condition.Status = metav1.ConditionTrue
+		condition.Reason = "Misconfigured"
+		condition.Message = err.Error()
+	} else {
+		condition.Status = metav1.ConditionFalse
+		condition.Reason = "CorrectConfiguration"
+		condition.Message = "The configuration is correct"
 	}
 	return condition
 }

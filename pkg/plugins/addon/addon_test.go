@@ -6,6 +6,7 @@ import (
 	"time"
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	testingclock "k8s.io/utils/clock/testing"
 	clusterapiv1 "open-cluster-management.io/api/cluster/v1"
@@ -23,6 +24,7 @@ func TestScoreClusterWithAddOn(t *testing.T) {
 		clusters            []*clusterapiv1.ManagedCluster
 		existingAddOnScores []runtime.Object
 		expectedScores      map[string]int64
+		expectedCondition   *metav1.Condition
 	}{
 		{
 			name:      "no addon scores",
@@ -34,6 +36,7 @@ func TestScoreClusterWithAddOn(t *testing.T) {
 			},
 			existingAddOnScores: []runtime.Object{},
 			expectedScores:      map[string]int64{"cluster1": 0, "cluster2": 0, "cluster3": 0},
+			expectedCondition:   nil,
 		},
 		{
 			name:      "part of addon scores generated",
@@ -46,7 +49,8 @@ func TestScoreClusterWithAddOn(t *testing.T) {
 			existingAddOnScores: []runtime.Object{
 				testinghelpers.NewAddOnPlacementScore("cluster1", "test").WithScore("score1", 30).Build(),
 			},
-			expectedScores: map[string]int64{"cluster1": 30, "cluster2": 0, "cluster3": 0},
+			expectedScores:    map[string]int64{"cluster1": 30, "cluster2": 0, "cluster3": 0},
+			expectedCondition: nil,
 		},
 		{
 			name:      "part of addon scores expired",
@@ -58,10 +62,14 @@ func TestScoreClusterWithAddOn(t *testing.T) {
 			},
 			existingAddOnScores: []runtime.Object{
 				testinghelpers.NewAddOnPlacementScore("cluster1", "test").WithScore("score1", 30).WithValidUntil(expiredTime).Build(),
-				testinghelpers.NewAddOnPlacementScore("cluster2", "test").WithScore("score1", 40).Build(),
+				testinghelpers.NewAddOnPlacementScore("cluster2", "test").WithScore("score1", 40).WithValidUntil(expiredTime).Build(),
 				testinghelpers.NewAddOnPlacementScore("cluster3", "test").WithScore("score1", 50).Build(),
 			},
-			expectedScores: map[string]int64{"cluster1": 0, "cluster2": 40, "cluster3": 50},
+			expectedScores: map[string]int64{"cluster1": 0, "cluster2": 0, "cluster3": 50},
+			expectedCondition: &metav1.Condition{
+				Reason:  "AddOnPlacementScoresExpired",
+				Message: "AddOnPlacementScores cluster1/test cluster2/test expired",
+			},
 		},
 		{
 			name:      "all the addon scores generated",
@@ -76,7 +84,8 @@ func TestScoreClusterWithAddOn(t *testing.T) {
 				testinghelpers.NewAddOnPlacementScore("cluster2", "test").WithScore("score1", 40).Build(),
 				testinghelpers.NewAddOnPlacementScore("cluster3", "test").WithScore("score1", 50).Build(),
 			},
-			expectedScores: map[string]int64{"cluster1": 30, "cluster2": 40, "cluster3": 50},
+			expectedScores:    map[string]int64{"cluster1": 30, "cluster2": 40, "cluster3": 50},
+			expectedCondition: nil,
 		},
 	}
 
@@ -90,13 +99,17 @@ func TestScoreClusterWithAddOn(t *testing.T) {
 				scoreName:       "score1",
 			}
 
-			scores, err := addon.Score(context.TODO(), c.placement, c.clusters)
+			scores, condition, err := addon.Score(context.TODO(), c.placement, c.clusters)
 			if err != nil {
 				t.Errorf("Expect no error, but got %v", err)
 			}
 
 			if !apiequality.Semantic.DeepEqual(scores, c.expectedScores) {
 				t.Errorf("Expect score %v, but got %v", c.expectedScores, scores)
+			}
+
+			if !apiequality.Semantic.DeepEqual(condition, c.expectedCondition) {
+				t.Errorf("Expect condition %v, but got %v", c.expectedCondition, condition)
 			}
 		})
 	}

@@ -120,6 +120,24 @@ func (b *placementBuilder) WithSatisfiedCondition(numbOfScheduledDecisions, numb
 	return b
 }
 
+func (b *placementBuilder) WithMisconfiguredCondition(message string) *placementBuilder {
+	condition := metav1.Condition{
+		Type: clusterapiv1beta1.PlacementConditionMisconfigured,
+	}
+	switch {
+	case len(message) > 0:
+		condition.Status = metav1.ConditionTrue
+		condition.Reason = "Misconfigured"
+		condition.Message = message
+	default:
+		condition.Status = metav1.ConditionFalse
+		condition.Reason = "CorrectConfiguration"
+		condition.Message = "The configuration is correct"
+	}
+	meta.SetStatusCondition(&b.placement.Status.Conditions, condition)
+	return b
+}
+
 func (b *placementBuilder) Build() *clusterapiv1beta1.Placement {
 	return b.placement
 }

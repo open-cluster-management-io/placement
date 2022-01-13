@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"sort"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterapiv1 "open-cluster-management.io/api/cluster/v1"
 	clusterapiv1beta1 "open-cluster-management.io/api/cluster/v1beta1"
 	"open-cluster-management.io/placement/pkg/plugins"
@@ -77,11 +78,12 @@ func (r *ResourcePrioritizer) Description() string {
 	return description
 }
 
-func (r *ResourcePrioritizer) Score(ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) (map[string]int64, error) {
+func (r *ResourcePrioritizer) Score(ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) (map[string]int64, *metav1.Condition, error) {
 	if r.algorithm == "Allocatable" {
-		return mostResourceAllocatableScores(r.resource, clusters)
+		score, err := mostResourceAllocatableScores(r.resource, clusters)
+		return score, nil, err
 	}
-	return nil, nil
+	return nil, nil, nil
 }
 
 // Calculate clusters scores based on the resource allocatable.

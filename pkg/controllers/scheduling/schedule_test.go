@@ -180,6 +180,46 @@ func TestSchedule(t *testing.T) {
 			expectedUnScheduled: 0,
 		},
 		{
+			name:      "placement with weight 0 Prioritizer Policy",
+			placement: testinghelpers.NewPlacement(placementNamespace, placementName).WithNOC(2).WithPrioritizerPolicy("Additive").WithPrioritizerConfig("Balance", 3).WithPrioritizerConfig("Steady", 0).WithScoreCoordinateAddOn("demo", "demo", 1).Build(),
+			initObjs: []runtime.Object{
+				testinghelpers.NewClusterSet(clusterSetName),
+				testinghelpers.NewClusterSetBinding(placementNamespace, clusterSetName),
+				testinghelpers.NewAddOnPlacementScore("cluster1", "demo").WithScore("demo", 50).Build(),
+				testinghelpers.NewAddOnPlacementScore("cluster2", "demo").WithScore("demo", 40).Build(),
+				testinghelpers.NewAddOnPlacementScore("cluster3", "demo").WithScore("demo", 30).Build(),
+			},
+			clusters: []*clusterapiv1.ManagedCluster{
+				testinghelpers.NewManagedCluster("cluster1").WithLabel(clusterSetLabel, clusterSetName).Build(),
+				testinghelpers.NewManagedCluster("cluster2").WithLabel(clusterSetLabel, clusterSetName).Build(),
+				testinghelpers.NewManagedCluster("cluster3").WithLabel(clusterSetLabel, clusterSetName).Build(),
+			},
+			decisions: []runtime.Object{},
+			expectedDecisions: []clusterapiv1beta1.ClusterDecision{
+				{ClusterName: "cluster1"},
+				{ClusterName: "cluster2"},
+			},
+			expectedFilterResult: []FilterResult{
+				{
+					Name:             "Predicate",
+					FilteredClusters: []string{"cluster1", "cluster2", "cluster3"},
+				},
+			},
+			expectedScoreResult: []PrioritizerResult{
+				{
+					Name:   "Balance",
+					Weight: 3,
+					Scores: PrioritizerScore{"cluster1": 100, "cluster2": 100, "cluster3": 100},
+				},
+				{
+					Name:   "AddOn/demo/demo",
+					Weight: 1,
+					Scores: PrioritizerScore{"cluster1": 50, "cluster2": 40, "cluster3": 30},
+				},
+			},
+			expectedUnScheduled: 0,
+		},
+		{
 			name:      "placement with additive Prioritizer Policy",
 			placement: testinghelpers.NewPlacement(placementNamespace, placementName).WithNOC(2).WithPrioritizerPolicy("Additive").WithPrioritizerConfig("Balance", 3).WithPrioritizerConfig("ResourceAllocatableMemory", 1).WithScoreCoordinateAddOn("demo", "demo", 1).Build(),
 			initObjs: []runtime.Object{
@@ -408,10 +448,15 @@ func TestSchedule(t *testing.T) {
 			c.initObjs = append(c.initObjs, c.placement)
 			clusterClient := clusterfake.NewSimpleClientset(c.initObjs...)
 			s := NewPluginScheduler(testinghelpers.NewFakePluginHandle(t, clusterClient, c.initObjs...))
+			prioritizers, err := s.PrePare(context.TODO(), c.placement)
+			if err != nil {
+				t.Errorf("unexpected err: %v", err)
+			}
 			result, err := s.Schedule(
 				context.TODO(),
 				c.placement,
 				c.clusters,
+				prioritizers,
 			)
 			if err != nil {
 				t.Errorf("unexpected err: %v", err)
