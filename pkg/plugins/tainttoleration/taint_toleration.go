@@ -2,6 +2,8 @@ package tainttoleration
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"reflect"
 
 	clusterapiv1 "open-cluster-management.io/api/cluster/v1"
@@ -28,94 +30,79 @@ func (pl *TaintToleration) Description() string {
 }
 
 func (pl *TaintToleration) Filter(ctx context.Context, placement *clusterapiv1alpha1.Placement, clusters []*clusterapiv1.ManagedCluster) ([]*clusterapiv1.ManagedCluster, error) {
-
-	if len(placement.Spec.Tolerations) == 0 {
-		return clusters, nil
-	}
 	if len(clusters) == 0 {
 		return clusters, nil
 	}
-
-	filterPredicate := func(t *clusterapiv1.Taint) bool {
-		// PodToleratesNodeTaints is only interested in NoSchedule and NoExecute taints.
-		return t.Effect == clusterapiv1.TaintEffectNoSelect || t.Effect == clusterapiv1.TaintEffectNoSelectIfNew
+	// do validation on each toleration and return error if necessary
+	for _, toleration := range placement.Spec.Tolerations {
+		if len(toleration.Key) == 0 && toleration.Operator != clusterapiv1alpha1.TolerationOpExists {
+			return nil, errors.New("If the key is empty, operator must be Exists.\n")
+		}
+		if toleration.Operator == clusterapiv1alpha1.TolerationOpExists && len(toleration.Value) > 0 {
+			return nil, errors.New("If the operator is Exists, the value should be empty.\n")
+		}
+		if toleration.TolerationSeconds != nil && toleration.Effect != clusterapiv1.TaintEffectNoSelect && toleration.Effect != clusterapiv1.TaintEffectPreferNoSelect {
+			fmt.Println("Warning: TolerationSeconds would be ignored if Effect is not NoSelect/PreferNoSelect.\n")
+		}
+	}
+	// If the placement has no toleration, all clusters with taint should be filtered out.
+	if len(placement.Spec.Tolerations) == 0 {
+		clusterWithoutTaints := []*clusterapiv1.ManagedCluster{}
+		for _, cluster := range clusters {
+			if len(cluster.Spec.Taints) == 0 {
+				clusterWithoutTaints = append(clusterWithoutTaints, cluster)
+			}
+		}
+		return clusterWithoutTaints, nil
 	}
 
-	// match cluster with selectors one by one
 	matched := []*clusterapiv1.ManagedCluster{}
 	for _, cluster := range clusters {
-		isUntolerated := IfUntolerated(cluster.Spec.Taints, placement.Spec.Tolerations, filterPredicate)
-		if isUntolerated {
-			continue
+		if isClusterTolerated(cluster, placement.Spec.Tolerations) {
+			matched = append(matched, cluster)
 		}
-		matched = append(matched, cluster)
 	}
-
 	return matched, nil
 }
 
-type taintsFilterFunc func(*clusterapiv1.Taint) bool
+// isClusterTolerated returns true if a cluster is tolerated by the given toleration array
+func isClusterTolerated(cluster *clusterapiv1.ManagedCluster, tolerations []clusterapiv1alpha1.Toleration) bool {
+	for _, taint := range cluster.Spec.Taints {
+		if !isTaintTolerated(taint, tolerations) {
+			return false
+		}
+	}
+	return true
+}
 
-// IfUntolerated checks if the given tolerations tolerates
-// all the filtered taints, and returns the first taint without a toleration
-// Returns true if there is an untolerated taint
-// Returns false if all taints are tolerated
-func IfUntolerated(taints []clusterapiv1.Taint, tolerations []clusterapiv1alpha1.Toleration, inclusionFilter taintsFilterFunc) bool {
-	filteredTaints := getFilteredTaints(taints, inclusionFilter)
-	for _, taint := range filteredTaints {
-		if !TolerationsTolerateTaint(tolerations, &taint) {
+// isTaintTolerated returns true if a taint is tolerated by the given toleration array
+func isTaintTolerated(taint clusterapiv1.Taint, tolerations []clusterapiv1alpha1.Toleration) bool {
+	if taint.Effect == clusterapiv1.TaintEffectPreferNoSelect {
+		return true
+	}
+
+	for _, toleration := range tolerations {
+		if isTolerated(taint, toleration) {
 			return true
 		}
 	}
 	return false
 }
 
-// getFilteredTaints returns a list of taints satisfying the filter predicate
-func getFilteredTaints(taints []clusterapiv1.Taint, inclusionFilter taintsFilterFunc) []clusterapiv1.Taint {
-	if inclusionFilter == nil {
-		return taints
-	}
-	filteredTaints := []clusterapiv1.Taint{}
-	for _, taint := range taints {
-		if !inclusionFilter(&taint) {
-			continue
-		}
-		filteredTaints = append(filteredTaints, taint)
-	}
-	return filteredTaints
-}
-
-// TolerationsTolerateTaint checks if taint is tolerated by any of the tolerations.
-func TolerationsTolerateTaint(tolerations []clusterapiv1alpha1.Toleration, taint *clusterapiv1.Taint) bool {
-	for i := range tolerations {
-		if ToleratesTaint(taint, &tolerations[i]) {
-			return true
-		}
-	}
-	return false
-}
-
-// ToleratesTaint checks if the toleration tolerates the taint.
-// The matching follows the rules below:
-// (1) Empty toleration.effect means to match all taint effects,
-//     otherwise taint effect must equal to toleration.effect.
-// (2) If toleration.operator is 'Exists', it means to match all taint values.
-// (3) Empty toleration.key means to match all taint keys.
-//     If toleration.key is empty, toleration.operator must be 'Exists';
-//     this combination means to match all taint values and all taint keys.
-func ToleratesTaint(taint *clusterapiv1.Taint, t *clusterapiv1alpha1.Toleration) bool {
-	if len(t.Effect) > 0 && t.Effect != taint.Effect {
+// isTolerated returns true if a taint is tolerated by the given toleration
+func isTolerated(taint clusterapiv1.Taint, toleration clusterapiv1alpha1.Toleration) bool {
+	if len(toleration.Effect) > 0 && toleration.Effect != taint.Effect {
 		return false
 	}
 
-	if len(t.Key) > 0 && t.Key != taint.Key {
+	if len(toleration.Key) > 0 && toleration.Key != taint.Key {
 		return false
 	}
 
-	switch t.Operator {
+	switch toleration.Operator {
 	// empty operator means Equal
 	case "", clusterapiv1alpha1.TolerationOpEqual:
-		return t.Value == taint.Value
+		return toleration.Value == taint.Value
 	case clusterapiv1alpha1.TolerationOpExists:
 		return true
 	default:
