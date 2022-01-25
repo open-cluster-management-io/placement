@@ -42,7 +42,7 @@ func (pl *TaintToleration) Filter(ctx context.Context, placement *clusterapiv1al
 			return nil, errors.New("If the operator is Exists, the value should be empty.\n")
 		}
 		if toleration.TolerationSeconds != nil && toleration.Effect != clusterapiv1.TaintEffectNoSelect && toleration.Effect != clusterapiv1.TaintEffectPreferNoSelect {
-			fmt.Println("Warning: TolerationSeconds would be ignored if Effect is not NoSelect/PreferNoSelect.\n")
+			fmt.Println("Warning: TolerationSeconds would be ignored if Effect is not NoSelect/PreferNoSelect.")
 		}
 	}
 	// If the placement has no toleration, all clusters with taint should be filtered out.
