@@ -611,11 +611,17 @@ var _ = ginkgo.Describe("Placement", func() {
 				Mode: clusterapiv1beta1.PrioritizerPolicyModeExact,
 				Configurations: []clusterapiv1beta1.PrioritizerConfig{
 					{
-						Name:   "ResourceAllocatableCPU",
+						ScoreCoordinate: &clusterapiv1beta1.ScoreCoordinate{
+							Type:    clusterapiv1beta1.ScoreCoordinateTypeBuiltIn,
+							BuiltIn: "ResourceAllocatableCPU",
+						},
 						Weight: 1,
 					},
 					{
-						Name:   "ResourceAllocatableMemory",
+						ScoreCoordinate: &clusterapiv1beta1.ScoreCoordinate{
+							Type:    clusterapiv1beta1.ScoreCoordinateTypeBuiltIn,
+							BuiltIn: "ResourceAllocatableMemory",
+						},
 						Weight: 1,
 					},
 				},
@@ -648,8 +654,7 @@ var _ = ginkgo.Describe("Placement", func() {
 				Configurations: []clusterapiv1beta1.PrioritizerConfig{
 					{
 						ScoreCoordinate: &clusterapiv1beta1.ScoreCoordinate{
-
-							Type: "AddOn",
+							Type: clusterapiv1beta1.ScoreCoordinateTypeAddOn,
 							AddOn: &clusterapiv1beta1.AddOnScore{
 								ResourceName: "demo",
 								ScoreName:    "demo",
@@ -686,8 +691,7 @@ var _ = ginkgo.Describe("Placement", func() {
 				Configurations: []clusterapiv1beta1.PrioritizerConfig{
 					{
 						ScoreCoordinate: &clusterapiv1beta1.ScoreCoordinate{
-
-							Type: "AddOn",
+							Type: clusterapiv1beta1.ScoreCoordinateTypeAddOn,
 							AddOn: &clusterapiv1beta1.AddOnScore{
 								ResourceName: "demo",
 								ScoreName:    "demo",
@@ -743,15 +747,24 @@ var _ = ginkgo.Describe("Placement", func() {
 				Mode: clusterapiv1beta1.PrioritizerPolicyModeAdditive,
 				Configurations: []clusterapiv1beta1.PrioritizerConfig{
 					{
-						Name:   "Steady",
+						ScoreCoordinate: &clusterapiv1beta1.ScoreCoordinate{
+							Type:    clusterapiv1beta1.ScoreCoordinateTypeBuiltIn,
+							BuiltIn: "Steady",
+						},
 						Weight: 3,
 					},
 					{
-						Name:   "ResourceAllocatableCPU",
+						ScoreCoordinate: &clusterapiv1beta1.ScoreCoordinate{
+							Type:    clusterapiv1beta1.ScoreCoordinateTypeBuiltIn,
+							BuiltIn: "ResourceAllocatableCPU",
+						},
 						Weight: 1,
 					},
 					{
-						Name:   "ResourceAllocatableMemory",
+						ScoreCoordinate: &clusterapiv1beta1.ScoreCoordinate{
+							Type:    clusterapiv1beta1.ScoreCoordinateTypeBuiltIn,
+							BuiltIn: "ResourceAllocatableMemory",
+						},
 						Weight: 1,
 					},
 				},
@@ -796,11 +809,17 @@ var _ = ginkgo.Describe("Placement", func() {
 				Mode: clusterapiv1beta1.PrioritizerPolicyModeExact,
 				Configurations: []clusterapiv1beta1.PrioritizerConfig{
 					{
-						Name:   "ResourceAllocatableCPU",
+						ScoreCoordinate: &clusterapiv1beta1.ScoreCoordinate{
+							Type:    clusterapiv1beta1.ScoreCoordinateTypeBuiltIn,
+							BuiltIn: "ResourceAllocatableCPU",
+						},
 						Weight: 1,
 					},
 					{
-						Name:   "ResourceAllocatableMemory",
+						ScoreCoordinate: &clusterapiv1beta1.ScoreCoordinate{
+							Type:    clusterapiv1beta1.ScoreCoordinateTypeBuiltIn,
+							BuiltIn: "ResourceAllocatableMemory",
+						},
 						Weight: 1,
 					},
 				},

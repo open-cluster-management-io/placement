@@ -78,7 +78,7 @@ func (c *AddOn) Score(ctx context.Context, placement *clusterapiv1beta1.Placemen
 		// get AddOnPlacementScores CR with resourceName
 		addOnScores, err := c.handle.ScoreLister().AddOnPlacementScores(namespace).Get(c.resourceName)
 		if err != nil {
-			klog.Warningf("Getting AddOnPlacementScores failed :%s", err)
+			klog.Warningf("Getting AddOnPlacementScores failed: %s", err)
 			continue
 		}
 

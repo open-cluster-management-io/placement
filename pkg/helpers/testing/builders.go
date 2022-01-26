@@ -51,7 +51,13 @@ func (b *placementBuilder) WithPrioritizerConfig(name string, weight int32) *pla
 		b.placement.Spec.PrioritizerPolicy.Configurations = []clusterapiv1beta1.PrioritizerConfig{}
 	}
 	if len(name) > 0 {
-		b.placement.Spec.PrioritizerPolicy.Configurations = append(b.placement.Spec.PrioritizerPolicy.Configurations, clusterapiv1beta1.PrioritizerConfig{Name: name, Weight: weight})
+		b.placement.Spec.PrioritizerPolicy.Configurations = append(b.placement.Spec.PrioritizerPolicy.Configurations, clusterapiv1beta1.PrioritizerConfig{
+			ScoreCoordinate: &clusterapiv1beta1.ScoreCoordinate{
+				Type:    clusterapiv1beta1.ScoreCoordinateTypeBuiltIn,
+				BuiltIn: name,
+			},
+			Weight: weight,
+		})
 	}
 	return b
 }
@@ -62,7 +68,7 @@ func (b *placementBuilder) WithScoreCoordinateAddOn(resourceName, scoreName stri
 	}
 	b.placement.Spec.PrioritizerPolicy.Configurations = append(b.placement.Spec.PrioritizerPolicy.Configurations, clusterapiv1beta1.PrioritizerConfig{
 		ScoreCoordinate: &clusterapiv1beta1.ScoreCoordinate{
-			Type: "AddOn",
+			Type: clusterapiv1beta1.ScoreCoordinateTypeAddOn,
 			AddOn: &clusterapiv1beta1.AddOnScore{
 				ResourceName: resourceName,
 				ScoreName:    scoreName,
@@ -111,14 +117,6 @@ func (b *placementBuilder) WithSatisfiedCondition(numbOfScheduledDecisions, numb
 		condition.Message = fmt.Sprintf("%d cluster decisions unscheduled", numbOfUnscheduledDecisions)
 	}
 	meta.SetStatusCondition(&b.placement.Status.Conditions, condition)
-	return b
-}
-
-func (b *placementBuilder) WithPrioritizerConfigs(name string, weight int32) *placementBuilder {
-	if b.placement.Spec.PrioritizerPolicy.Configurations == nil {
-		b.placement.Spec.PrioritizerPolicy.Configurations = []clusterapiv1beta1.PrioritizerConfig{}
-	}
-	b.placement.Spec.PrioritizerPolicy.Configurations = append(b.placement.Spec.PrioritizerPolicy.Configurations, clusterapiv1beta1.PrioritizerConfig{Name: name, Weight: weight})
 	return b
 }
 

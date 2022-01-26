@@ -266,15 +266,15 @@ func getWeights(defaultWeight map[clusterapiv1beta1.ScoreCoordinate]int32, place
 	mode := placement.Spec.PrioritizerPolicy.Mode
 	switch {
 	case mode == clusterapiv1beta1.PrioritizerPolicyModeExact:
-		return mergeWeights(nil, placement.Spec.PrioritizerPolicy.Configurations), nil
+		return mergeWeights(nil, placement.Spec.PrioritizerPolicy.Configurations)
 	case mode == clusterapiv1beta1.PrioritizerPolicyModeAdditive || mode == "":
-		return mergeWeights(defaultWeight, placement.Spec.PrioritizerPolicy.Configurations), nil
+		return mergeWeights(defaultWeight, placement.Spec.PrioritizerPolicy.Configurations)
 	default:
 		return nil, fmt.Errorf("incorrect prioritizer policy mode: %s", mode)
 	}
 }
 
-func mergeWeights(defaultWeight map[clusterapiv1beta1.ScoreCoordinate]int32, customizedWeight []clusterapiv1beta1.PrioritizerConfig) map[clusterapiv1beta1.ScoreCoordinate]int32 {
+func mergeWeights(defaultWeight map[clusterapiv1beta1.ScoreCoordinate]int32, customizedWeight []clusterapiv1beta1.PrioritizerConfig) (map[clusterapiv1beta1.ScoreCoordinate]int32, error) {
 	weights := make(map[clusterapiv1beta1.ScoreCoordinate]int32)
 	// copy the default weight
 	for sc, w := range defaultWeight {
@@ -286,15 +286,10 @@ func mergeWeights(defaultWeight map[clusterapiv1beta1.ScoreCoordinate]int32, cus
 		if c.ScoreCoordinate != nil {
 			weights[*c.ScoreCoordinate] = c.Weight
 		} else {
-			// Keep compatibility for pre-existing data which doesn't have scorecoordinate field.
-			sc := clusterapiv1beta1.ScoreCoordinate{
-				Type:    clusterapiv1beta1.ScoreCoordinateTypeBuiltIn,
-				BuiltIn: c.Name,
-			}
-			weights[sc] = c.Weight
+			return nil, fmt.Errorf("scoreCoordinate field is required")
 		}
 	}
-	return weights
+	return weights, nil
 }
 
 // Generate prioritizers for the placement.

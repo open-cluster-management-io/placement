@@ -48,7 +48,7 @@ var benchmarkPlacement = clusterapiv1beta1.Placement{
 				{
 					ScoreCoordinate: &clusterapiv1beta1.ScoreCoordinate{
 
-						Type: "AddOn",
+						Type: clusterapiv1beta1.ScoreCoordinateTypeAddOn,
 						AddOn: &clusterapiv1beta1.AddOnScore{
 							ResourceName: "demo",
 							ScoreName:    "demo",
@@ -57,11 +57,19 @@ var benchmarkPlacement = clusterapiv1beta1.Placement{
 					Weight: 1,
 				},
 				{
-					Name:   "ResourceAllocatableCPU",
+					ScoreCoordinate: &clusterapiv1beta1.ScoreCoordinate{
+
+						Type:    clusterapiv1beta1.ScoreCoordinateTypeBuiltIn,
+						BuiltIn: "ResourceAllocatableCPU",
+					},
 					Weight: 1,
 				},
 				{
-					Name:   "Balance",
+					ScoreCoordinate: &clusterapiv1beta1.ScoreCoordinate{
+
+						Type:    clusterapiv1beta1.ScoreCoordinateTypeBuiltIn,
+						BuiltIn: "Balance",
+					},
 					Weight: 1,
 				},
 			},
