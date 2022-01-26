@@ -34,22 +34,22 @@ var clusterClient clusterv1client.Interface
 var namespace, name = "benchmark", "benchmark"
 var noc = int32(10)
 
-var benchmarkPlacement = clusterapiv1alpha1.Placement{
+var benchmarkPlacement = clusterapiv1beta1.Placement{
 	ObjectMeta: metav1.ObjectMeta{
 		Namespace: namespace,
 		Name:      name,
 	},
-	Spec: clusterapiv1alpha1.PlacementSpec{
+	Spec: clusterapiv1beta1.PlacementSpec{
 		NumberOfClusters: &noc,
 
-		PrioritizerPolicy: clusterapiv1alpha1.PrioritizerPolicy{
-			Mode: clusterapiv1alpha1.PrioritizerPolicyModeExact,
-			Configurations: []clusterapiv1alpha1.PrioritizerConfig{
+		PrioritizerPolicy: clusterapiv1beta1.PrioritizerPolicy{
+			Mode: clusterapiv1beta1.PrioritizerPolicyModeExact,
+			Configurations: []clusterapiv1beta1.PrioritizerConfig{
 				{
-					ScoreCoordinate: &clusterapiv1alpha1.ScoreCoordinate{
+					ScoreCoordinate: &clusterapiv1beta1.ScoreCoordinate{
 
 						Type: "AddOn",
-						AddOn: &clusterapiv1alpha1.AddOnScore{
+						AddOn: &clusterapiv1beta1.AddOnScore{
 							ResourceName: "demo",
 							ScoreName:    "demo",
 						},
@@ -191,7 +191,7 @@ func createClusters(namespace, name string, num int) {
 func createPlacements(num int) {
 	for i := 0; i < num; i++ {
 		benchmarkPlacement.Name = fmt.Sprintf("%s-%d", name, i)
-		_, err := clusterClient.ClusterV1alpha1().Placements(namespace).Create(context.Background(), &benchmarkPlacement, metav1.CreateOptions{})
+		_, err := clusterClient.ClusterV1beta1().Placements(namespace).Create(context.Background(), &benchmarkPlacement, metav1.CreateOptions{})
 		if err != nil {
 			klog.Fatalf("%v", err)
 		}
@@ -200,7 +200,7 @@ func createPlacements(num int) {
 
 func assertPlacementDecisions(num int, cancel context.CancelFunc) {
 	for {
-		decisions, _ := clusterClient.ClusterV1alpha1().PlacementDecisions(namespace).List(context.Background(), metav1.ListOptions{})
+		decisions, _ := clusterClient.ClusterV1beta1().PlacementDecisions(namespace).List(context.Background(), metav1.ListOptions{})
 		if len(decisions.Items) == num {
 			if cancel != nil {
 				cancel()
