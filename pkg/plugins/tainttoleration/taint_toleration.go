@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"time"
 
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
@@ -67,7 +68,6 @@ func (pl *TaintToleration) Filter(ctx context.Context, placement *clusterapiv1be
 	return matched, nil
 }
 
-// TODO: TolerationSeconds
 // isClusterTolerated returns true if a cluster is tolerated by the given toleration array
 func isClusterTolerated(cluster *clusterapiv1.ManagedCluster, tolerations []clusterapiv1beta1.Toleration, exist bool) bool {
 	for _, taint := range cluster.Spec.Taints {
@@ -81,7 +81,7 @@ func isClusterTolerated(cluster *clusterapiv1.ManagedCluster, tolerations []clus
 // isTaintTolerated returns true if a taint is tolerated by the given toleration array
 func isTaintTolerated(taint clusterapiv1.Taint, tolerations []clusterapiv1beta1.Toleration, exist bool) bool {
 	for _, toleration := range tolerations {
-		if isToleratedByEffect(taint, toleration, exist) || isTolerated(taint, toleration) {
+		if isToleratedByEffect(taint, toleration, exist) || (isTolerationValid(taint, toleration) && isTolerated(taint, toleration)) {
 			return true
 		}
 	}
@@ -105,6 +105,17 @@ func isToleratedByEffect(taint clusterapiv1.Taint, toleration clusterapiv1beta1.
 	default:
 		return false
 	}
+}
+
+func isTolerationValid(taint clusterapiv1.Taint, toleration clusterapiv1beta1.Toleration) bool {
+	// TolerationSeconds is nil means tolerates is valid forever
+	if toleration.TolerationSeconds == nil {
+		return true
+	}
+
+	// current time is before taint.TimeAdded + TolerationSeconds means toleration is valid
+	tolerateUntil := taint.TimeAdded.Time.Add(time.Duration(*toleration.TolerationSeconds) * time.Second)
+	return time.Now().Before(tolerateUntil)
 }
 
 // isTolerated returns true if a taint is tolerated by the given toleration
