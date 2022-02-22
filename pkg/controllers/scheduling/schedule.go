@@ -18,6 +18,7 @@ import (
 	"open-cluster-management.io/placement/pkg/plugins/predicate"
 	"open-cluster-management.io/placement/pkg/plugins/resource"
 	"open-cluster-management.io/placement/pkg/plugins/steady"
+	"open-cluster-management.io/placement/pkg/plugins/tainttoleration"
 )
 
 const (
@@ -139,6 +140,7 @@ func NewPluginScheduler(handle plugins.Handle) *pluginScheduler {
 		handle: handle,
 		filters: []plugins.Filter{
 			predicate.New(handle),
+			tainttoleration.New(handle),
 		},
 		prioritizerWeights: defaultPrioritizerConfig,
 	}
