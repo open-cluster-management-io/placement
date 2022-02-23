@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/clock"
 	clusterapiv1 "open-cluster-management.io/api/cluster/v1"
 	clusterapiv1beta1 "open-cluster-management.io/api/cluster/v1beta1"
 	"open-cluster-management.io/placement/pkg/plugins"
@@ -18,6 +19,7 @@ import (
 var _ plugins.Filter = &TaintToleration{}
 
 var timeDiffs = sort.Float64Slice{}
+var TolerationClock = (clock.Clock)(clock.RealClock{})
 
 const (
 	placementLabel = "cluster.open-cluster-management.io/placement"
@@ -125,7 +127,7 @@ func isTolerationValid(taint clusterapiv1.Taint, toleration clusterapiv1beta1.To
 	}
 
 	// current time is before taint.TimeAdded + TolerationSeconds means toleration is valid
-	timeDiff := time.Duration(*toleration.TolerationSeconds)*time.Second - time.Since(taint.TimeAdded.Time)
+	timeDiff := time.Duration(*toleration.TolerationSeconds)*time.Second - TolerationClock.Since(taint.TimeAdded.Time)
 	if timeDiff > 0 {
 		timeDiffs = append(timeDiffs, float64(timeDiff))
 		return true
