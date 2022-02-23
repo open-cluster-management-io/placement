@@ -3,6 +3,7 @@ package plugins
 import (
 	"context"
 	"math"
+	"time"
 
 	"k8s.io/client-go/tools/events"
 	clusterclient "open-cluster-management.io/api/client/cluster/clientset/versioned"
@@ -35,7 +36,7 @@ type Filter interface {
 	Plugin
 
 	// Filter returns a list of clusters satisfying the certain condition.
-	Filter(ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) ([]*clusterapiv1.ManagedCluster, error)
+	Filter(ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) ([]*clusterapiv1.ManagedCluster, *time.Duration, error)
 }
 
 // Prioritizer defines a prioritizer plugin that score each cluster. The score is normalized
@@ -45,7 +46,7 @@ type Prioritizer interface {
 
 	// Score gives the score to a list of the clusters, it returns a map with the key as
 	// the cluster name.
-	Score(ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) (map[string]int64, error)
+	Score(ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) (map[string]int64, *time.Duration, error)
 }
 
 // Handle provides data and some tools that plugins can use. It is

@@ -65,7 +65,7 @@ func TestScoreClusterWithSteady(t *testing.T) {
 				handle: testinghelpers.NewFakePluginHandle(t, nil, c.existingDecisions...),
 			}
 
-			scores, err := steady.Score(context.TODO(), c.placement, c.clusters)
+			scores, _, err := steady.Score(context.TODO(), c.placement, c.clusters)
 			if err != nil {
 				t.Errorf("Expect no error, but got %v", err)
 			}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	kevents "k8s.io/client-go/tools/events"
 	clusterclient "open-cluster-management.io/api/client/cluster/clientset/versioned"
@@ -55,6 +56,9 @@ type ScheduleResult interface {
 
 	// NumOfUnscheduled returns the number of unscheduled.
 	NumOfUnscheduled() int
+
+	// RequeueAfter returns the requeue time interval of the placement
+	RequeueAfter() *time.Duration
 }
 
 type FilterResult struct {
@@ -79,6 +83,8 @@ type scheduleResult struct {
 	filteredRecords map[string][]*clusterapiv1.ManagedCluster
 	scoreRecords    []PrioritizerResult
 	scoreSum        PrioritizerScore
+
+	requeueAfter *time.Duration
 }
 
 type schedulerHandler struct {
@@ -152,6 +158,7 @@ func (s *pluginScheduler) Schedule(
 	clusters []*clusterapiv1.ManagedCluster,
 ) (ScheduleResult, error) {
 	var err error
+	requeueAfter := sort.Float64Slice{}
 	filtered := clusters
 
 	results := &scheduleResult{
@@ -163,10 +170,16 @@ func (s *pluginScheduler) Schedule(
 	filterPipline := []string{}
 
 	for _, f := range s.filters {
-		filtered, err = f.Filter(ctx, placement, filtered)
+		var t *time.Duration
+		filtered, t, err = f.Filter(ctx, placement, filtered)
 
 		if err != nil {
 			return nil, err
+		}
+
+		// record the requeue time
+		if t != nil {
+			requeueAfter = append(requeueAfter, float64(*t))
 		}
 
 		filterPipline = append(filterPipline, f.Name())
@@ -194,10 +207,16 @@ func (s *pluginScheduler) Schedule(
 		scoreSum[cluster.Name] = 0
 	}
 	for sc, p := range prioritizers {
+		var t *time.Duration
 		// Get cluster score.
-		score, err := p.Score(ctx, placement, filtered)
+		score, t, err := p.Score(ctx, placement, filtered)
 		if err != nil {
 			return nil, err
+		}
+
+		// record the requeue time
+		if t != nil {
+			requeueAfter = append(requeueAfter, float64(*t))
 		}
 
 		// Record prioritizer score and weight
@@ -234,6 +253,13 @@ func (s *pluginScheduler) Schedule(
 	}
 	results.scheduledDecisions = decisions
 	results.unscheduledDecisions = unscheduled
+
+	// set the minual requeue time as the placement requeue time
+	if len(requeueAfter) > 0 {
+		sort.Float64s(requeueAfter)
+		t := time.Duration(requeueAfter[0])
+		results.requeueAfter = &t
+	}
 
 	return results, nil
 }
@@ -351,4 +377,8 @@ func (r *scheduleResult) Decisions() []clusterapiv1beta1.ClusterDecision {
 
 func (r *scheduleResult) NumOfUnscheduled() int {
 	return r.unscheduledDecisions
+}
+
+func (r *scheduleResult) RequeueAfter() *time.Duration {
+	return r.requeueAfter
 }

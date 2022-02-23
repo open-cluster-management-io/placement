@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"sort"
 	"time"
 
 	"k8s.io/apimachinery/pkg/labels"
@@ -15,6 +16,8 @@ import (
 )
 
 var _ plugins.Filter = &TaintToleration{}
+
+var timeDiffs = sort.Float64Slice{}
 
 const (
 	placementLabel = "cluster.open-cluster-management.io/placement"
@@ -39,18 +42,18 @@ func (pl *TaintToleration) Description() string {
 	return description
 }
 
-func (pl *TaintToleration) Filter(ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) ([]*clusterapiv1.ManagedCluster, error) {
+func (pl *TaintToleration) Filter(ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) ([]*clusterapiv1.ManagedCluster, *time.Duration, error) {
 	if len(clusters) == 0 {
-		return clusters, nil
+		return clusters, nil, nil
 	}
 
 	// do validation on each toleration and return error if necessary
 	for _, toleration := range placement.Spec.Tolerations {
 		if len(toleration.Key) == 0 && toleration.Operator != clusterapiv1beta1.TolerationOpExists {
-			return nil, errors.New("If the key is empty, operator must be Exists.\n")
+			return nil, nil, errors.New("If the key is empty, operator must be Exists.\n")
 		}
 		if toleration.Operator == clusterapiv1beta1.TolerationOpExists && len(toleration.Value) > 0 {
-			return nil, errors.New("If the operator is Exists, the value should be empty.\n")
+			return nil, nil, errors.New("If the operator is Exists, the value should be empty.\n")
 		}
 		//		if toleration.TolerationSeconds != nil && toleration.Effect != clusterapiv1.TaintEffectNoSelect && toleration.Effect != clusterapiv1.TaintEffectPreferNoSelect {
 		//			klog.Warningf("TolerationSeconds would be ignored if Effect is not NoSelect/PreferNoSelect.")
@@ -65,7 +68,15 @@ func (pl *TaintToleration) Filter(ctx context.Context, placement *clusterapiv1be
 			matched = append(matched, cluster)
 		}
 	}
-	return matched, nil
+
+	//calculate requeue time
+	if len(timeDiffs) > 0 {
+		sort.Float64s(timeDiffs)
+		requeueTime := time.Duration(timeDiffs[0])
+		return matched, &requeueTime, nil
+	}
+
+	return matched, nil, nil
 }
 
 // isClusterTolerated returns true if a cluster is tolerated by the given toleration array
@@ -114,8 +125,12 @@ func isTolerationValid(taint clusterapiv1.Taint, toleration clusterapiv1beta1.To
 	}
 
 	// current time is before taint.TimeAdded + TolerationSeconds means toleration is valid
-	tolerateUntil := taint.TimeAdded.Time.Add(time.Duration(*toleration.TolerationSeconds) * time.Second)
-	return time.Now().Before(tolerateUntil)
+	timeDiff := time.Duration(*toleration.TolerationSeconds)*time.Second - time.Since(taint.TimeAdded.Time)
+	if timeDiff > 0 {
+		timeDiffs = append(timeDiffs, float64(timeDiff))
+		return true
+	}
+	return false
 }
 
 // isTolerated returns true if a taint is tolerated by the given toleration

@@ -3,6 +3,7 @@ package predicate
 import (
 	"context"
 	"reflect"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -36,13 +37,13 @@ func (p *Predicate) Description() string {
 }
 
 func (p *Predicate) Filter(
-	ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) ([]*clusterapiv1.ManagedCluster, error) {
+	ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) ([]*clusterapiv1.ManagedCluster, *time.Duration, error) {
 
 	if len(placement.Spec.Predicates) == 0 {
-		return clusters, nil
+		return clusters, nil, nil
 	}
 	if len(clusters) == 0 {
-		return clusters, nil
+		return clusters, nil, nil
 	}
 
 	// prebuild label/claim selectors for each predicate
@@ -51,12 +52,12 @@ func (p *Predicate) Filter(
 		// build label selector
 		labelSelector, err := convertLabelSelector(predicate.RequiredClusterSelector.LabelSelector)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		// build claim selector
 		claimSelector, err := convertClaimSelector(predicate.RequiredClusterSelector.ClaimSelector)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		predicateSelectors = append(predicateSelectors, predicateSelector{
 			labelSelector: labelSelector,
@@ -82,7 +83,7 @@ func (p *Predicate) Filter(
 		}
 	}
 
-	return matched, nil
+	return matched, nil, nil
 }
 
 // getClusterClaims returns a map containing cluster claims from the status of cluster

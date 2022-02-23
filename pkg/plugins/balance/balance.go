@@ -3,6 +3,7 @@ package balance
 import (
 	"context"
 	"reflect"
+	"time"
 
 	"k8s.io/apimachinery/pkg/labels"
 	clusterapiv1 "open-cluster-management.io/api/cluster/v1"
@@ -39,7 +40,7 @@ func (b *Balance) Description() string {
 	return description
 }
 
-func (b *Balance) Score(ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) (map[string]int64, error) {
+func (b *Balance) Score(ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) (map[string]int64, *time.Duration, error) {
 	scores := map[string]int64{}
 	for _, cluster := range clusters {
 		scores[cluster.Name] = plugins.MaxClusterScore
@@ -47,7 +48,7 @@ func (b *Balance) Score(ctx context.Context, placement *clusterapiv1beta1.Placem
 
 	decisions, err := b.handle.DecisionLister().List(labels.Everything())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var maxCount int64
@@ -74,5 +75,5 @@ func (b *Balance) Score(ctx context.Context, placement *clusterapiv1beta1.Placem
 			scores[clusterName] = 2 * int64(float64(plugins.MaxClusterScore)*(0.5-usage))
 		}
 	}
-	return scores, nil
+	return scores, nil, nil
 }

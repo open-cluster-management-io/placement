@@ -3,6 +3,7 @@ package addon
 import (
 	"context"
 	"fmt"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
@@ -66,7 +67,7 @@ func (c *AddOn) Description() string {
 	return description
 }
 
-func (c *AddOn) Score(ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) (map[string]int64, error) {
+func (c *AddOn) Score(ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) (map[string]int64, *time.Duration, error) {
 	scores := map[string]int64{}
 	expiredScores := ""
 
@@ -104,5 +105,5 @@ func (c *AddOn) Score(ctx context.Context, placement *clusterapiv1beta1.Placemen
 			"AddOnPlacementScores%s expired", expiredScores)
 	}
 
-	return scores, nil
+	return scores, nil, nil
 }

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"testing"
+	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	clusterfake "open-cluster-management.io/api/client/cluster/clientset/versioned/fake"
@@ -46,6 +47,10 @@ func (r *testResult) Decisions() []clusterapiv1beta1.ClusterDecision {
 
 func (r *testResult) NumOfUnscheduled() int {
 	return 0
+}
+
+func (r *testResult) RequeueAfter() *time.Duration {
+	return nil
 }
 
 func (s *testScheduler) Schedule(ctx context.Context,

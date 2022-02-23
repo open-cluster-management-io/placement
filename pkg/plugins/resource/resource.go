@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"time"
 
 	clusterapiv1 "open-cluster-management.io/api/cluster/v1"
 	clusterapiv1beta1 "open-cluster-management.io/api/cluster/v1beta1"
@@ -77,23 +78,23 @@ func (r *ResourcePrioritizer) Description() string {
 	return description
 }
 
-func (r *ResourcePrioritizer) Score(ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) (map[string]int64, error) {
+func (r *ResourcePrioritizer) Score(ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) (map[string]int64, *time.Duration, error) {
 	if r.algorithm == "Allocatable" {
 		return mostResourceAllocatableScores(r.resource, clusters)
 	}
-	return nil, nil
+	return nil, nil, nil
 }
 
 // Calculate clusters scores based on the resource allocatable.
 // The clusters that has the most allocatable are given the highest score, while the least is given the lowest score.
 // The score range is from -100 to 100.
-func mostResourceAllocatableScores(resourceName clusterapiv1.ResourceName, clusters []*clusterapiv1.ManagedCluster) (map[string]int64, error) {
+func mostResourceAllocatableScores(resourceName clusterapiv1.ResourceName, clusters []*clusterapiv1.ManagedCluster) (map[string]int64, *time.Duration, error) {
 	scores := map[string]int64{}
 
 	// get resourceName's min and max allocatable among all the clusters
 	minAllocatable, maxAllocatable, err := getClustersMinMaxAllocatableResource(clusters, resourceName)
 	if err != nil {
-		return scores, nil
+		return scores, nil, nil
 	}
 
 	for _, cluster := range clusters {
@@ -112,7 +113,7 @@ func mostResourceAllocatableScores(resourceName clusterapiv1.ResourceName, clust
 		}
 	}
 
-	return scores, nil
+	return scores, nil, nil
 }
 
 // Go through one cluster resources and return the allocatable and capacity of the resourceName.

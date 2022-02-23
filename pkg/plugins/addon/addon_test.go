@@ -90,7 +90,7 @@ func TestScoreClusterWithAddOn(t *testing.T) {
 				scoreName:       "score1",
 			}
 
-			scores, err := addon.Score(context.TODO(), c.placement, c.clusters)
+			scores, _, err := addon.Score(context.TODO(), c.placement, c.clusters)
 			if err != nil {
 				t.Errorf("Expect no error, but got %v", err)
 			}
