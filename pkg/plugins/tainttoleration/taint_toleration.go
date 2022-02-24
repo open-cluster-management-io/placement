@@ -57,9 +57,6 @@ func (pl *TaintToleration) Filter(ctx context.Context, placement *clusterapiv1be
 		if toleration.Operator == clusterapiv1beta1.TolerationOpExists && len(toleration.Value) > 0 {
 			return nil, nil, errors.New("If the operator is Exists, the value should be empty.\n")
 		}
-		//		if toleration.TolerationSeconds != nil && toleration.Effect != clusterapiv1.TaintEffectNoSelect && toleration.Effect != clusterapiv1.TaintEffectPreferNoSelect {
-		//			klog.Warningf("TolerationSeconds would be ignored if Effect is not NoSelect/PreferNoSelect.")
-		//		}
 	}
 
 	existingDecisions := getDecisions(pl.handle, placement)

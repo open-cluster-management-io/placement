@@ -144,21 +144,21 @@ func TestMatchWithClusterTaintToleration(t *testing.T) {
 						Key:       "key1",
 						Value:     "value1",
 						Effect:    clusterapiv1.TaintEffectNoSelect,
-						TimeAdded: metav1.Time{addedTime_9},
+						TimeAdded: metav1.NewTime(addedTime_9),
 					}).Build(),
 				testinghelpers.NewManagedCluster("cluster2").WithTaint(
 					&clusterapiv1.Taint{
 						Key:       "key1",
 						Value:     "value2",
 						Effect:    clusterapiv1.TaintEffectNoSelect,
-						TimeAdded: metav1.Time{addedTime_10},
+						TimeAdded: metav1.NewTime(addedTime_10),
 					}).Build(),
 				testinghelpers.NewManagedCluster("cluster3").WithTaint(
 					&clusterapiv1.Taint{
 						Key:       "key1",
 						Value:     "value3",
 						Effect:    clusterapiv1.TaintEffectNoSelect,
-						TimeAdded: metav1.Time{addedTime_11},
+						TimeAdded: metav1.NewTime(addedTime_11),
 					}).Build(),
 			},
 			existingDecisions:    []runtime.Object{},

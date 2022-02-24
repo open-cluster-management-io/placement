@@ -355,7 +355,7 @@ func (r *scheduleResult) FilterResults() []FilterResult {
 
 	// order the FilterResults by key length
 	filteredRecordsKey := []string{}
-	for name, _ := range r.filteredRecords {
+	for name := range r.filteredRecords {
 		filteredRecordsKey = append(filteredRecordsKey, name)
 	}
 	sort.SliceStable(filteredRecordsKey, func(i, j int) bool {
