@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
-	"time"
 
 	clusterapiv1 "open-cluster-management.io/api/cluster/v1"
 	clusterapiv1beta1 "open-cluster-management.io/api/cluster/v1beta1"
@@ -78,23 +77,29 @@ func (r *ResourcePrioritizer) Description() string {
 	return description
 }
 
-func (r *ResourcePrioritizer) Score(ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) (map[string]int64, *time.Duration, error) {
+func (r *ResourcePrioritizer) RequeueAfter(ctx context.Context, placement *clusterapiv1beta1.Placement) *plugins.PluginRequeueResult {
+	return nil
+}
+
+func (r *ResourcePrioritizer) Score(ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) plugins.PluginScoreResult {
 	if r.algorithm == "Allocatable" {
 		return mostResourceAllocatableScores(r.resource, clusters)
 	}
-	return nil, nil, nil
+	return plugins.PluginScoreResult{}
 }
 
 // Calculate clusters scores based on the resource allocatable.
 // The clusters that has the most allocatable are given the highest score, while the least is given the lowest score.
 // The score range is from -100 to 100.
-func mostResourceAllocatableScores(resourceName clusterapiv1.ResourceName, clusters []*clusterapiv1.ManagedCluster) (map[string]int64, *time.Duration, error) {
+func mostResourceAllocatableScores(resourceName clusterapiv1.ResourceName, clusters []*clusterapiv1.ManagedCluster) plugins.PluginScoreResult {
 	scores := map[string]int64{}
 
 	// get resourceName's min and max allocatable among all the clusters
 	minAllocatable, maxAllocatable, err := getClustersMinMaxAllocatableResource(clusters, resourceName)
 	if err != nil {
-		return scores, nil, nil
+		return plugins.PluginScoreResult{
+			Scores: scores,
+		}
 	}
 
 	for _, cluster := range clusters {
@@ -113,7 +118,9 @@ func mostResourceAllocatableScores(resourceName clusterapiv1.ResourceName, clust
 		}
 	}
 
-	return scores, nil, nil
+	return plugins.PluginScoreResult{
+		Scores: scores,
+	}
 }
 
 // Go through one cluster resources and return the allocatable and capacity of the resourceName.

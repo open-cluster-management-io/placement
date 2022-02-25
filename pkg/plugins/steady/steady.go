@@ -3,7 +3,6 @@ package steady
 import (
 	"context"
 	"reflect"
-	"time"
 
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
@@ -42,21 +41,29 @@ func (s *Steady) Description() string {
 	return description
 }
 
+func (s *Steady) RequeueAfter(ctx context.Context, placement *clusterapiv1beta1.Placement) *plugins.PluginRequeueResult {
+	return nil
+}
+
 func (s *Steady) Score(
-	ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) (map[string]int64, *time.Duration, error) {
+	ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) plugins.PluginScoreResult {
 	// query placementdecisions with label selector
 	scores := map[string]int64{}
 	requirement, err := labels.NewRequirement(placementLabel, selection.Equals, []string{placement.Name})
 
 	if err != nil {
-		return nil, nil, err
+		return plugins.PluginScoreResult{
+			Err: err,
+		}
 	}
 
 	labelSelector := labels.NewSelector().Add(*requirement)
 	decisions, err := s.handle.DecisionLister().PlacementDecisions(placement.Namespace).List(labelSelector)
 
 	if err != nil {
-		return nil, nil, err
+		return plugins.PluginScoreResult{
+			Err: err,
+		}
 	}
 
 	existingDecisions := sets.String{}
@@ -74,5 +81,7 @@ func (s *Steady) Score(
 		}
 	}
 
-	return scores, nil, nil
+	return plugins.PluginScoreResult{
+		Scores: scores,
+	}
 }

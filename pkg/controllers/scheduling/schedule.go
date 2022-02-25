@@ -157,8 +157,6 @@ func (s *pluginScheduler) Schedule(
 	placement *clusterapiv1beta1.Placement,
 	clusters []*clusterapiv1.ManagedCluster,
 ) (ScheduleResult, error) {
-	var err error
-	requeueAfter := sort.Float64Slice{}
 	filtered := clusters
 
 	results := &scheduleResult{
@@ -170,16 +168,12 @@ func (s *pluginScheduler) Schedule(
 	filterPipline := []string{}
 
 	for _, f := range s.filters {
-		var t *time.Duration
-		filtered, t, err = f.Filter(ctx, placement, filtered)
+		filterResult := f.Filter(ctx, placement, filtered)
+		filtered = filterResult.Filtered
+		err := filterResult.Err
 
 		if err != nil {
 			return nil, err
-		}
-
-		// record the requeue time
-		if t != nil {
-			requeueAfter = append(requeueAfter, float64(*t))
 		}
 
 		filterPipline = append(filterPipline, f.Name())
@@ -207,16 +201,13 @@ func (s *pluginScheduler) Schedule(
 		scoreSum[cluster.Name] = 0
 	}
 	for sc, p := range prioritizers {
-		var t *time.Duration
 		// Get cluster score.
-		score, t, err := p.Score(ctx, placement, filtered)
+		scoreResult := p.Score(ctx, placement, filtered)
+		score := scoreResult.Scores
+		err := scoreResult.Err
+
 		if err != nil {
 			return nil, err
-		}
-
-		// record the requeue time
-		if t != nil {
-			requeueAfter = append(requeueAfter, float64(*t))
 		}
 
 		// Record prioritizer score and weight
@@ -245,7 +236,6 @@ func (s *pluginScheduler) Schedule(
 	results.scoreSum = scoreSum
 
 	// select clusters and generate cluster decisions
-	// TODO: sort the feasible clusters and make sure the selection stable
 	decisions := selectClusters(placement, filtered)
 	scheduled, unscheduled := len(decisions), 0
 	if placement.Spec.NumberOfClusters != nil {
@@ -254,11 +244,16 @@ func (s *pluginScheduler) Schedule(
 	results.scheduledDecisions = decisions
 	results.unscheduledDecisions = unscheduled
 
-	// set the minual requeue time as the placement requeue time
-	if len(requeueAfter) > 0 {
-		sort.Float64s(requeueAfter)
-		t := time.Duration(requeueAfter[0])
-		results.requeueAfter = &t
+	// set placement requeue time
+	for _, f := range s.filters {
+		if requeue := f.RequeueAfter(ctx, placement); requeue != nil {
+			setRequeueTime(results.requeueAfter, requeue.RequeueTime)
+		}
+	}
+	for _, p := range prioritizers {
+		if requeue := p.RequeueAfter(ctx, placement); requeue != nil {
+			setRequeueTime(results.requeueAfter, requeue.RequeueTime)
+		}
 	}
 
 	return results, nil
@@ -285,6 +280,14 @@ func selectClusters(placement *clusterapiv1beta1.Placement, clusters []*clustera
 		})
 	}
 	return decisions
+}
+
+// setRequeueTime selects minimal time as requeue time
+func setRequeueTime(requeueAfter *time.Duration, requeueTime time.Time) {
+	timeDiff := time.Until(requeueTime)
+	if timeDiff > 0 && (requeueAfter == nil || timeDiff < *requeueAfter) {
+		requeueAfter = &timeDiff
+	}
 }
 
 // Get prioritizer weight for the placement.

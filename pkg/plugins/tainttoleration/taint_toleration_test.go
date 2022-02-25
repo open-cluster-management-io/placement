@@ -31,6 +31,34 @@ func TestMatchWithClusterTaintToleration(t *testing.T) {
 		expectedClusterNames []string
 	}{
 		{
+			name:      "tanits match no tolerations when taint.Effect is NoSelect",
+			placement: testinghelpers.NewPlacement("test", "test").Build(),
+			clusters: []*clusterapiv1.ManagedCluster{
+				testinghelpers.NewManagedCluster("cluster1").WithTaint(
+					&clusterapiv1.Taint{
+						Key:       "key1",
+						Value:     "value1",
+						Effect:    clusterapiv1.TaintEffectNoSelect,
+						TimeAdded: metav1.Time{},
+					}).Build(),
+				testinghelpers.NewManagedCluster("cluster2").WithTaint(
+					&clusterapiv1.Taint{
+						Key:       "key1",
+						Value:     "value1",
+						Effect:    clusterapiv1.TaintEffectNoSelect,
+						TimeAdded: metav1.Time{},
+					}).WithTaint(
+					&clusterapiv1.Taint{
+						Key:       "key2",
+						Value:     "value2",
+						Effect:    clusterapiv1.TaintEffectNoSelect,
+						TimeAdded: metav1.Time{},
+					}).Build(),
+			},
+			existingDecisions:    []runtime.Object{},
+			expectedClusterNames: []string{},
+		},
+		{
 			name: "tanits match tolerations when taint.Effect is NoSelect and tolerations.Operator is Equal",
 			placement: testinghelpers.NewPlacement("test", "test").AddToleration(
 				&clusterapiv1beta1.Toleration{
@@ -96,7 +124,38 @@ func TestMatchWithClusterTaintToleration(t *testing.T) {
 			expectedClusterNames: []string{"cluster1"},
 		},
 		{
-			name: "tanits match tolerations by taint.Effect NoSelectIfNew",
+			name:      "tanits match no tolerations when taint.Effect is NoSelectIfNew",
+			placement: testinghelpers.NewPlacement("test", "test").Build(),
+			clusters: []*clusterapiv1.ManagedCluster{
+				testinghelpers.NewManagedCluster("cluster1").WithTaint(
+					&clusterapiv1.Taint{
+						Key:       "key1",
+						Value:     "value1",
+						Effect:    clusterapiv1.TaintEffectNoSelectIfNew,
+						TimeAdded: metav1.Time{},
+					}).Build(),
+				testinghelpers.NewManagedCluster("cluster2").WithTaint(
+					&clusterapiv1.Taint{
+						Key:       "key2",
+						Value:     "value2",
+						Effect:    clusterapiv1.TaintEffectNoSelectIfNew,
+						TimeAdded: metav1.Time{},
+					}).Build(),
+				testinghelpers.NewManagedCluster("cluster3").WithTaint(
+					&clusterapiv1.Taint{
+						Key:       "key3",
+						Value:     "value3",
+						Effect:    clusterapiv1.TaintEffectNoSelectIfNew,
+						TimeAdded: metav1.Time{},
+					}).Build(),
+			},
+			existingDecisions: []runtime.Object{
+				testinghelpers.NewPlacementDecision("test", "test").WithLabel(placementLabel, "test").WithDecisions("cluster2").Build(),
+			},
+			expectedClusterNames: []string{},
+		},
+		{
+			name: "tanits match tolerations when taint.Effect is NoSelectIfNew",
 			placement: testinghelpers.NewPlacement("test", "test").AddToleration(
 				&clusterapiv1beta1.Toleration{
 					Key:      "key1",
@@ -150,7 +209,7 @@ func TestMatchWithClusterTaintToleration(t *testing.T) {
 					&clusterapiv1.Taint{
 						Key:       "key1",
 						Value:     "value2",
-						Effect:    clusterapiv1.TaintEffectNoSelect,
+						Effect:    clusterapiv1.TaintEffectPreferNoSelect,
 						TimeAdded: metav1.NewTime(addedTime_10),
 					}).Build(),
 				testinghelpers.NewManagedCluster("cluster3").WithTaint(
@@ -162,7 +221,7 @@ func TestMatchWithClusterTaintToleration(t *testing.T) {
 					}).Build(),
 			},
 			existingDecisions:    []runtime.Object{},
-			expectedClusterNames: []string{"cluster1"},
+			expectedClusterNames: []string{"cluster2"},
 		},
 	}
 
@@ -172,7 +231,10 @@ func TestMatchWithClusterTaintToleration(t *testing.T) {
 			p := &TaintToleration{
 				handle: testinghelpers.NewFakePluginHandle(t, nil, c.existingDecisions...),
 			}
-			clusters, _, err := p.Filter(context.TODO(), c.placement, c.clusters)
+			result := p.Filter(context.TODO(), c.placement, c.clusters)
+			clusters := result.Filtered
+			err := result.Err
+
 			if err != nil {
 				t.Errorf("unexpected err: %v", err)
 			}
@@ -187,6 +249,7 @@ func TestMatchWithClusterTaintToleration(t *testing.T) {
 			if expectedClusterNames.Len() > 0 {
 				t.Errorf("expected clusters not selected: %s", strings.Join(expectedClusterNames.List(), ","))
 			}
+
 		})
 	}
 

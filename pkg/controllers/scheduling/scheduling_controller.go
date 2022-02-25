@@ -285,11 +285,14 @@ func (c *schedulingController) syncPlacement(ctx context.Context, syncCtx factor
 	}
 
 	// requeue placement if requeueAfter is defined in scheduleResult
+	// TODO: check how it being requeued
 	if syncCtx != nil && scheduleResult.RequeueAfter() != nil {
 		key, _ := cache.MetaNamespaceKeyFunc(placement)
-		t := *scheduleResult.RequeueAfter()
-		klog.V(4).Infof("Requeue placement %s after %t", key, t)
-		syncCtx.Queue().AddAfter(key, t)
+		t := scheduleResult.RequeueAfter()
+		if t != nil {
+			klog.V(4).Infof("Requeue placement %s after %t", key, t)
+			syncCtx.Queue().AddAfter(key, *t)
+		}
 	}
 
 	err = c.bind(ctx, placement, scheduleResult.Decisions(), scheduleResult.PrioritizerScores())
