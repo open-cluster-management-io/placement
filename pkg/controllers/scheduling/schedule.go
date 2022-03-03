@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	kevents "k8s.io/client-go/tools/events"
 	clusterclient "open-cluster-management.io/api/client/cluster/clientset/versioned"
@@ -55,6 +56,9 @@ type ScheduleResult interface {
 
 	// NumOfUnscheduled returns the number of unscheduled.
 	NumOfUnscheduled() int
+
+	// RequeueAfter returns the requeue time interval of the placement
+	RequeueAfter() *time.Duration
 }
 
 type FilterResult struct {
@@ -79,6 +83,7 @@ type scheduleResult struct {
 	filteredRecords map[string][]*clusterapiv1.ManagedCluster
 	scoreRecords    []PrioritizerResult
 	scoreSum        PrioritizerScore
+	requeueAfter    *time.Duration
 }
 
 type schedulerHandler struct {
@@ -163,7 +168,9 @@ func (s *pluginScheduler) Schedule(
 	filterPipline := []string{}
 
 	for _, f := range s.filters {
-		filtered, err = f.Filter(ctx, placement, filtered)
+		filterResult := f.Filter(ctx, placement, filtered)
+		filtered = filterResult.Filtered
+		err := filterResult.Err
 
 		if err != nil {
 			return nil, err
@@ -195,7 +202,9 @@ func (s *pluginScheduler) Schedule(
 	}
 	for sc, p := range prioritizers {
 		// Get cluster score.
-		score, err := p.Score(ctx, placement, filtered)
+		scoreResult := p.Score(ctx, placement, filtered)
+		score := scoreResult.Scores
+		err := scoreResult.Err
 		if err != nil {
 			return nil, err
 		}
@@ -362,4 +371,8 @@ func (r *scheduleResult) Decisions() []clusterapiv1beta1.ClusterDecision {
 
 func (r *scheduleResult) NumOfUnscheduled() int {
 	return r.unscheduledDecisions
+}
+
+func (r *scheduleResult) RequeueAfter() *time.Duration {
+	return r.requeueAfter
 }
