@@ -3,12 +3,15 @@ package tainttoleration
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
+	"sort"
 	"time"
 
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 	clusterapiv1 "open-cluster-management.io/api/cluster/v1"
 	clusterapiv1beta1 "open-cluster-management.io/api/cluster/v1beta1"
@@ -16,6 +19,7 @@ import (
 )
 
 var _ plugins.Filter = &TaintToleration{}
+var pluginRequeueResults []plugins.PluginRequeueResult
 var TolerationClock = (clock.Clock)(clock.RealClock{})
 
 const (
@@ -62,12 +66,12 @@ func (pl *TaintToleration) Filter(ctx context.Context, placement *clusterapiv1be
 		}
 	}
 
-	existingDecisions := getDecisions(pl.handle, placement)
+	decisionClusterNames := getDecisionClusterNames(pl.handle, placement)
 
 	// filter the clusters
 	matched := []*clusterapiv1.ManagedCluster{}
 	for _, cluster := range clusters {
-		if isClusterTolerated(cluster, placement.Spec.Tolerations, existingDecisions.Has(cluster.Name)) {
+		if isClusterTolerated(cluster, placement.Spec.Tolerations, decisionClusterNames.Has(cluster.Name)) {
 			matched = append(matched, cluster)
 		}
 	}
@@ -78,6 +82,28 @@ func (pl *TaintToleration) Filter(ctx context.Context, placement *clusterapiv1be
 }
 
 func (pl *TaintToleration) RequeueAfter(ctx context.Context, placement *clusterapiv1beta1.Placement) plugins.PluginRequeueResult {
+	// get exist decisions clusters
+	decisionClusterNames, decisionClusters := getDecisionClusters(pl.handle, placement)
+	if decisionClusterNames == nil || decisionClusters == nil {
+		return plugins.PluginRequeueResult{}
+	}
+
+	// initialize global var pluginRequeueResults
+	pluginRequeueResults = []plugins.PluginRequeueResult{}
+	// filter and record pluginRequeueResults
+	for _, cluster := range decisionClusters {
+		isClusterTolerated(cluster, placement.Spec.Tolerations, decisionClusterNames.Has(cluster.Name))
+	}
+	// sort pluginRequeueResults and return the minimal RequeueTime
+	sort.SliceStable(pluginRequeueResults, func(i, j int) bool {
+		t1 := pluginRequeueResults[i].RequeueTime
+		t2 := pluginRequeueResults[j].RequeueTime
+		return t1 != nil && t2 != nil && t1.Before(*t2)
+	})
+	if len(pluginRequeueResults) > 0 {
+		return pluginRequeueResults[0]
+	}
+
 	return plugins.PluginRequeueResult{}
 }
 
@@ -139,12 +165,25 @@ func isTolerationTimeExpired(taint clusterapiv1.Taint, toleration clusterapiv1be
 		return true
 	}
 
-	// timeDiff = toleration.TolerationSeconds - (now - taint.TimeAdded)
-	timeDiff := time.Duration(*toleration.TolerationSeconds)*time.Second - TolerationClock.Since(taint.TimeAdded.Time)
-	return timeDiff > 0
+	requeueTime := taint.TimeAdded.Add(time.Duration(*toleration.TolerationSeconds) * time.Second)
+
+	if TolerationClock.Now().Before(requeueTime) {
+		// only record requeue time when global var pluginRequeueResults is initialized in RequeueAfter()
+		if pluginRequeueResults != nil {
+			message := fmt.Sprintf("Cluster %s taint is added at %v, placement toleration seconds is %d", "clustername", taint.TimeAdded, *toleration.TolerationSeconds)
+			p := plugins.PluginRequeueResult{
+				RequeueTime: &requeueTime,
+				Reasons:     []string{message},
+			}
+			pluginRequeueResults = append(pluginRequeueResults, p)
+		}
+		return true
+	}
+
+	return false
 }
 
-func getDecisions(handle plugins.Handle, placement *clusterapiv1beta1.Placement) sets.String {
+func getDecisionClusterNames(handle plugins.Handle, placement *clusterapiv1beta1.Placement) sets.String {
 	existingDecisions := sets.String{}
 
 	// query placementdecisions with label selector
@@ -166,4 +205,21 @@ func getDecisions(handle plugins.Handle, placement *clusterapiv1beta1.Placement)
 	}
 
 	return existingDecisions
+}
+
+func getDecisionClusters(handle plugins.Handle, placement *clusterapiv1beta1.Placement) (sets.String, []*clusterapiv1.ManagedCluster) {
+	// get existing decision cluster name
+	decisionClusterNames := getDecisionClusterNames(handle, placement)
+
+	// get existing decision clusters
+	decisionClusters := []*clusterapiv1.ManagedCluster{}
+	for c := range decisionClusterNames {
+		if managedCluser, err := handle.ClusterLister().Get(c); err != nil {
+			klog.Warningf("Failed to get ManagedCluster: %s", err)
+		} else {
+			decisionClusters = append(decisionClusters, managedCluser)
+		}
+	}
+
+	return decisionClusterNames, decisionClusters
 }

@@ -7,6 +7,7 @@ import (
 
 	"k8s.io/client-go/tools/events"
 	clusterclient "open-cluster-management.io/api/client/cluster/clientset/versioned"
+	clusterlisterv1 "open-cluster-management.io/api/client/cluster/listers/cluster/v1"
 	clusterlisterv1alpha1 "open-cluster-management.io/api/client/cluster/listers/cluster/v1alpha1"
 	clusterlisterv1beta1 "open-cluster-management.io/api/client/cluster/listers/cluster/v1beta1"
 	clusterapiv1 "open-cluster-management.io/api/cluster/v1"
@@ -59,6 +60,9 @@ type Handle interface {
 
 	// ScoreLister lists all AddOnPlacementScores
 	ScoreLister() clusterlisterv1alpha1.AddOnPlacementScoreLister
+
+	// ClusterLister lists all ManagedClusters
+	ClusterLister() clusterlisterv1.ManagedClusterLister
 
 	// ClusterClient returns the cluster client
 	ClusterClient() clusterclient.Interface
