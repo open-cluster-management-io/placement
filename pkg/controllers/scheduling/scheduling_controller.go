@@ -333,6 +333,22 @@ func (c *schedulingController) getEligibleClusterSets(placement *clusterapiv1bet
 		clusterSetNames = clusterSetNames.Intersection(sets.NewString(placement.Spec.ClusterSets...))
 	}
 
+	// ignore the non-legacy clusterset
+	nonLegacyClusterSetNames := sets.NewString()
+	for clusterSetName := range clusterSetNames {
+		clusterSet, err := c.clusterSetLister.Get(clusterSetName)
+		if err != nil {
+			nonLegacyClusterSetNames.Insert(clusterSetName)
+			continue
+		}
+
+		selectorType := clusterSet.Spec.ClusterSelector.SelectorType
+		if len(selectorType) > 0 && selectorType != clusterapiv1beta1.LegacyClusterSetLabel {
+			nonLegacyClusterSetNames.Insert(clusterSetName)
+		}
+	}
+	clusterSetNames = clusterSetNames.Difference(nonLegacyClusterSetNames)
+
 	return clusterSetNames.List()
 }
 
