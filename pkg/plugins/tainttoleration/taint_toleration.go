@@ -19,7 +19,6 @@ import (
 )
 
 var _ plugins.Filter = &TaintToleration{}
-var pluginRequeueResults []plugins.PluginRequeueResult
 var TolerationClock = (clock.Clock)(clock.RealClock{})
 
 const (
@@ -71,7 +70,7 @@ func (pl *TaintToleration) Filter(ctx context.Context, placement *clusterapiv1be
 	// filter the clusters
 	matched := []*clusterapiv1.ManagedCluster{}
 	for _, cluster := range clusters {
-		if isClusterTolerated(cluster, placement.Spec.Tolerations, decisionClusterNames.Has(cluster.Name)) {
+		if tolerated, _ := isClusterTolerated(cluster, placement.Spec.Tolerations, decisionClusterNames.Has(cluster.Name)); tolerated {
 			matched = append(matched, cluster)
 		}
 	}
@@ -88,65 +87,69 @@ func (pl *TaintToleration) RequeueAfter(ctx context.Context, placement *clustera
 		return plugins.PluginRequeueResult{}
 	}
 
-	// initialize global var pluginRequeueResults
-	pluginRequeueResults = []plugins.PluginRequeueResult{}
+	requeueList := []*plugins.PluginRequeueResult{}
 	// filter and record pluginRequeueResults
 	for _, cluster := range decisionClusters {
-		isClusterTolerated(cluster, placement.Spec.Tolerations, decisionClusterNames.Has(cluster.Name))
-	}
-	// sort pluginRequeueResults and return the minimal RequeueTime
-	sort.SliceStable(pluginRequeueResults, func(i, j int) bool {
-		t1 := pluginRequeueResults[i].RequeueTime
-		t2 := pluginRequeueResults[j].RequeueTime
-		return t1 != nil && t2 != nil && t1.Before(*t2)
-	})
-	if len(pluginRequeueResults) > 0 {
-		return pluginRequeueResults[0]
+		tolerated, requeue := isClusterTolerated(cluster, placement.Spec.Tolerations, decisionClusterNames.Has(cluster.Name))
+		if tolerated && requeue != nil {
+			requeueList = append(requeueList, requeue)
+		}
 	}
 
-	return plugins.PluginRequeueResult{}
+	requeueResult := minRequeueTime(requeueList)
+	if requeueResult == nil {
+		return plugins.PluginRequeueResult{}
+	}
+
+	return *requeueResult
 }
 
 // isClusterTolerated returns true if a cluster is tolerated by the given toleration array
-func isClusterTolerated(cluster *clusterapiv1.ManagedCluster, tolerations []clusterapiv1beta1.Toleration, inDecision bool) bool {
+func isClusterTolerated(cluster *clusterapiv1.ManagedCluster, tolerations []clusterapiv1beta1.Toleration, inDecision bool) (bool, *plugins.PluginRequeueResult) {
+	requeueList := []*plugins.PluginRequeueResult{}
 	for _, taint := range cluster.Spec.Taints {
-		if !isTaintTolerated(taint, tolerations, inDecision) {
-			return false
+		tolerated, requeue := isTaintTolerated(taint, tolerations, inDecision)
+		if !tolerated {
+			return false, nil
+		}
+		if requeue != nil {
+			requeueList = append(requeueList, requeue)
 		}
 	}
-	return true
+
+	return true, minRequeueTime(requeueList)
 }
 
 // isTaintTolerated returns true if a taint is tolerated by the given toleration array
-func isTaintTolerated(taint clusterapiv1.Taint, tolerations []clusterapiv1beta1.Toleration, inDecision bool) bool {
+func isTaintTolerated(taint clusterapiv1.Taint, tolerations []clusterapiv1beta1.Toleration, inDecision bool) (bool, *plugins.PluginRequeueResult) {
 	if taint.Effect == clusterapiv1.TaintEffectPreferNoSelect {
-		return true
+		return true, nil
 	}
 
 	if (taint.Effect == clusterapiv1.TaintEffectNoSelectIfNew) && inDecision {
-		return true
+		return true, nil
 	}
 
 	for _, toleration := range tolerations {
-		if isTolerated(taint, toleration) {
-			return true
+		if tolerated, requeue := isTolerated(taint, toleration); tolerated {
+			return true, requeue
 		}
 	}
-	return false
+
+	return false, nil
 }
 
 // isTolerated returns true if a taint is tolerated by the given toleration
-func isTolerated(taint clusterapiv1.Taint, toleration clusterapiv1beta1.Toleration) bool {
+func isTolerated(taint clusterapiv1.Taint, toleration clusterapiv1beta1.Toleration) (bool, *plugins.PluginRequeueResult) {
 	if len(toleration.Effect) > 0 && toleration.Effect != taint.Effect {
-		return false
+		return false, nil
 	}
 
 	if len(toleration.Key) > 0 && toleration.Key != taint.Key {
-		return false
+		return false, nil
 	}
 
 	taintMatched := false
-
 	switch toleration.Operator {
 	// empty operator means Equal
 	case "", clusterapiv1beta1.TolerationOpEqual:
@@ -155,32 +158,33 @@ func isTolerated(taint clusterapiv1.Taint, toleration clusterapiv1beta1.Tolerati
 		taintMatched = true
 	}
 
-	return taintMatched && isTolerationTimeExpired(taint, toleration)
+	if taintMatched {
+		return isTolerationTimeExpired(taint, toleration)
+	}
+
+	return false, nil
+
 }
 
 // isTolerationTimeExpired returns true if TolerationSeconds is nil or not expired
-func isTolerationTimeExpired(taint clusterapiv1.Taint, toleration clusterapiv1beta1.Toleration) bool {
+func isTolerationTimeExpired(taint clusterapiv1.Taint, toleration clusterapiv1beta1.Toleration) (bool, *plugins.PluginRequeueResult) {
 	// TolerationSeconds is nil means it never expire
 	if toleration.TolerationSeconds == nil {
-		return true
+		return true, nil
 	}
 
 	requeueTime := taint.TimeAdded.Add(time.Duration(*toleration.TolerationSeconds) * time.Second)
 
 	if TolerationClock.Now().Before(requeueTime) {
-		// only record requeue time when global var pluginRequeueResults is initialized in RequeueAfter()
-		if pluginRequeueResults != nil {
-			message := fmt.Sprintf("Cluster %s taint is added at %v, placement toleration seconds is %d", "clustername", taint.TimeAdded, *toleration.TolerationSeconds)
-			p := plugins.PluginRequeueResult{
-				RequeueTime: &requeueTime,
-				Reasons:     []string{message},
-			}
-			pluginRequeueResults = append(pluginRequeueResults, p)
+		message := fmt.Sprintf("Cluster %s taint is added at %v, placement toleration seconds is %d", "clustername", taint.TimeAdded, *toleration.TolerationSeconds)
+		p := plugins.PluginRequeueResult{
+			RequeueTime: &requeueTime,
+			Reasons:     []string{message},
 		}
-		return true
+		return true, &p
 	}
 
-	return false
+	return false, nil
 }
 
 func getDecisionClusterNames(handle plugins.Handle, placement *clusterapiv1beta1.Placement) sets.String {
@@ -222,4 +226,20 @@ func getDecisionClusters(handle plugins.Handle, placement *clusterapiv1beta1.Pla
 	}
 
 	return decisionClusterNames, decisionClusters
+}
+
+// return the PluginRequeueResult with minimal requeue time
+func minRequeueTime(requeueList []*plugins.PluginRequeueResult) *plugins.PluginRequeueResult {
+	if requeueList == nil || len(requeueList) <= 0 {
+		return nil
+	}
+
+	// sort requeueList and return the minimal RequeueTime
+	sort.SliceStable(requeueList, func(i, j int) bool {
+		t1 := requeueList[i].RequeueTime
+		t2 := requeueList[j].RequeueTime
+		return t1 != nil && t2 != nil && t1.Before(*t2)
+	})
+
+	return requeueList[0]
 }

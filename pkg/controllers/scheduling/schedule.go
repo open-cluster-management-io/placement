@@ -292,7 +292,7 @@ func selectClusters(placement *clusterapiv1beta1.Placement, clusters []*clustera
 
 // setRequeueAfter selects minimal time.Duration as requeue time
 func setRequeueAfter(requeueAfter, newRequeueAfter *time.Duration) *time.Duration {
-	if newRequeueAfter == nil || *newRequeueAfter <= 0 {
+	if newRequeueAfter == nil {
 		return requeueAfter
 	}
 

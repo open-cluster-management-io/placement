@@ -18,9 +18,9 @@ import (
 
 var fakeTime = time.Date(2022, time.January, 01, 0, 0, 0, 0, time.UTC)
 var requeueTime_1 = fakeTime.Add(1 * time.Second)
+var addedTime_8 = fakeTime.Add(-8 * time.Second)
 var addedTime_9 = fakeTime.Add(-9 * time.Second)
 var addedTime_10 = fakeTime.Add(-10 * time.Second)
-var addedTime_11 = fakeTime.Add(-11 * time.Second)
 var tolerationSeconds_10 = int64(10)
 
 func TestMatchWithClusterTaintToleration(t *testing.T) {
@@ -261,27 +261,62 @@ func TestMatchWithClusterTaintToleration(t *testing.T) {
 						Key:       "key1",
 						Value:     "value1",
 						Effect:    clusterapiv1.TaintEffectNoSelect,
-						TimeAdded: metav1.NewTime(addedTime_9),
+						TimeAdded: metav1.NewTime(addedTime_8),
 					}).Build(),
 				testinghelpers.NewManagedCluster("cluster2").WithTaint(
 					&clusterapiv1.Taint{
 						Key:       "key1",
 						Value:     "value2",
 						Effect:    clusterapiv1.TaintEffectNoSelect,
-						TimeAdded: metav1.NewTime(addedTime_10),
+						TimeAdded: metav1.NewTime(addedTime_9),
 					}).Build(),
 				testinghelpers.NewManagedCluster("cluster3").WithTaint(
 					&clusterapiv1.Taint{
 						Key:       "key1",
 						Value:     "value3",
 						Effect:    clusterapiv1.TaintEffectNoSelect,
-						TimeAdded: metav1.NewTime(addedTime_11),
+						TimeAdded: metav1.NewTime(addedTime_10),
+					}).Build(),
+			},
+			initObjs:              []runtime.Object{},
+			expectedClusterNames:  []string{"cluster1", "cluster2"},
+			expectedRequeueResult: plugins.PluginRequeueResult{},
+		},
+		{
+			name: "placement requeue placement when expire toleration.TolerationSeconds",
+			placement: testinghelpers.NewPlacement("test", "test").AddToleration(
+				&clusterapiv1beta1.Toleration{
+					Key:               "key1",
+					Operator:          clusterapiv1beta1.TolerationOpExists,
+					TolerationSeconds: &tolerationSeconds_10,
+				}).Build(),
+			clusters: []*clusterapiv1.ManagedCluster{
+				testinghelpers.NewManagedCluster("cluster1").WithTaint(
+					&clusterapiv1.Taint{
+						Key:       "key1",
+						Value:     "value1",
+						Effect:    clusterapiv1.TaintEffectNoSelect,
+						TimeAdded: metav1.NewTime(addedTime_8),
+					}).Build(),
+				testinghelpers.NewManagedCluster("cluster2").WithTaint(
+					&clusterapiv1.Taint{
+						Key:       "key1",
+						Value:     "value2",
+						Effect:    clusterapiv1.TaintEffectNoSelect,
+						TimeAdded: metav1.NewTime(addedTime_9),
+					}).Build(),
+				testinghelpers.NewManagedCluster("cluster3").WithTaint(
+					&clusterapiv1.Taint{
+						Key:       "key1",
+						Value:     "value3",
+						Effect:    clusterapiv1.TaintEffectNoSelect,
+						TimeAdded: metav1.NewTime(addedTime_10),
 					}).Build(),
 			},
 			initObjs: []runtime.Object{
-				testinghelpers.NewPlacementDecision("test", "test").WithLabel(placementLabel, "test").WithDecisions("cluster1").Build(),
+				testinghelpers.NewPlacementDecision("test", "test").WithLabel(placementLabel, "test").WithDecisions("cluster1", "cluster2").Build(),
 			},
-			expectedClusterNames: []string{"cluster1"},
+			expectedClusterNames: []string{"cluster1", "cluster2"},
 			expectedRequeueResult: plugins.PluginRequeueResult{
 				RequeueTime: &requeueTime_1,
 			},
