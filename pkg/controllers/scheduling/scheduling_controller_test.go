@@ -278,8 +278,8 @@ func TestGetValidManagedClusterSets(t *testing.T) {
 			placement: testinghelpers.NewPlacement("ns1", "test").WithClusterSets("clusterset1", "clusterset2").Build(),
 			bindings:  []*clusterapiv1beta1.ManagedClusterSetBinding{},
 			initObjs: []runtime.Object{
-				testinghelpers.NewClusterSet("clusterset2").WithClusterSelector(clusterapiv1beta1.LegacyClusterSetLabel).Build(),
-				testinghelpers.NewClusterSet("clusterset3").WithClusterSelector(clusterapiv1beta1.LegacyClusterSetLabel).Build(),
+				testinghelpers.NewClusterSet("clusterset2").Build(),
+				testinghelpers.NewClusterSet("clusterset3").Build(),
 			},
 			expectedClusterSetNames: []string{},
 		},
@@ -291,8 +291,8 @@ func TestGetValidManagedClusterSets(t *testing.T) {
 				testinghelpers.NewClusterSetBinding(placementNamespace, "clusterset2"),
 			},
 			initObjs: []runtime.Object{
-				testinghelpers.NewClusterSet("clusterset1").WithClusterSelector(clusterapiv1beta1.LegacyClusterSetLabel).Build(),
-				testinghelpers.NewClusterSet("clusterset2").WithClusterSelector(clusterapiv1beta1.LegacyClusterSetLabel).Build(),
+				testinghelpers.NewClusterSet("clusterset1").Build(),
+				testinghelpers.NewClusterSet("clusterset2").Build(),
 			},
 			expectedClusterSetNames: []string{"clusterset1", "clusterset2"},
 		},
@@ -304,52 +304,10 @@ func TestGetValidManagedClusterSets(t *testing.T) {
 				testinghelpers.NewClusterSetBinding(placementNamespace, "clusterset3"),
 			},
 			initObjs: []runtime.Object{
-				testinghelpers.NewClusterSet("clusterset2").WithClusterSelector(clusterapiv1beta1.LegacyClusterSetLabel).Build(),
-				testinghelpers.NewClusterSet("clusterset3").WithClusterSelector(clusterapiv1beta1.LegacyClusterSetLabel).Build(),
+				testinghelpers.NewClusterSet("clusterset2").Build(),
+				testinghelpers.NewClusterSet("clusterset3").Build(),
 			},
 			expectedClusterSetNames: []string{"clusterset2"},
-		},
-		{
-			name:      "clusterset has no ClusterSelector",
-			placement: testinghelpers.NewPlacement("ns1", "test").Build(),
-			bindings: []*clusterapiv1beta1.ManagedClusterSetBinding{
-				testinghelpers.NewClusterSetBinding(placementNamespace, "clusterset1"),
-			},
-			initObjs: []runtime.Object{
-				testinghelpers.NewClusterSet("clusterset1").Build(),
-			},
-			expectedClusterSetNames: []string{"clusterset1"},
-		},
-		{
-			name:      "clusterset has valid ClusterSelector",
-			placement: testinghelpers.NewPlacement("ns1", "test").Build(),
-			bindings: []*clusterapiv1beta1.ManagedClusterSetBinding{
-				testinghelpers.NewClusterSetBinding(placementNamespace, "clusterset1"),
-			},
-			initObjs: []runtime.Object{
-				testinghelpers.NewClusterSet("clusterset1").WithClusterSelector(clusterapiv1beta1.LegacyClusterSetLabel).Build(),
-			},
-			expectedClusterSetNames: []string{"clusterset1"},
-		},
-		{
-			name:      "clusterset has invalid ClusterSelector",
-			placement: testinghelpers.NewPlacement("ns1", "test").Build(),
-			bindings: []*clusterapiv1beta1.ManagedClusterSetBinding{
-				testinghelpers.NewClusterSetBinding(placementNamespace, "clusterset1"),
-			},
-			initObjs: []runtime.Object{
-				testinghelpers.NewClusterSet("clusterset1").WithClusterSelector("FutureClusterSetLabel").Build(),
-			},
-			expectedClusterSetNames: []string{},
-		},
-		{
-			name:      "clusterset is removed",
-			placement: testinghelpers.NewPlacement("ns1", "test").Build(),
-			bindings: []*clusterapiv1beta1.ManagedClusterSetBinding{
-				testinghelpers.NewClusterSetBinding(placementNamespace, "clusterset1"),
-			},
-			initObjs:                []runtime.Object{},
-			expectedClusterSetNames: []string{},
 		},
 	}
 
@@ -378,8 +336,6 @@ func TestGetValidManagedClusterSets(t *testing.T) {
 	}
 }
 func TestGetAvailableClusters(t *testing.T) {
-	placementNamespace := "ns1"
-
 	cases := []struct {
 		name                 string
 		clusterSetNames      []string
@@ -390,17 +346,51 @@ func TestGetAvailableClusters(t *testing.T) {
 			name: "no clusterset",
 			initObjs: []runtime.Object{
 				testinghelpers.NewClusterSet("clusterset1").Build(),
-				testinghelpers.NewClusterSetBinding(placementNamespace, "clusterset1"),
 			},
 		},
 		{
 			name:            "select clusters from clustersets",
 			clusterSetNames: []string{"clusterset1", "clusterset2"},
 			initObjs: []runtime.Object{
+				testinghelpers.NewClusterSet("clusterset1").Build(),
+				testinghelpers.NewClusterSet("clusterset2").Build(),
 				testinghelpers.NewManagedCluster("cluster1").WithLabel(clusterSetLabel, "clusterset1").Build(),
 				testinghelpers.NewManagedCluster("cluster2").WithLabel(clusterSetLabel, "clusterset2").Build(),
 			},
 			expectedClusterNames: []string{"cluster1", "cluster2"},
+		},
+		{
+			name:            "clusterset has no ClusterSelector",
+			clusterSetNames: []string{"clusterset1"},
+			initObjs: []runtime.Object{
+				testinghelpers.NewClusterSet("clusterset1").Build(),
+				testinghelpers.NewManagedCluster("cluster1").WithLabel(clusterSetLabel, "clusterset1").Build(),
+			},
+			expectedClusterNames: []string{"cluster1"},
+		},
+		{
+			name:            "clusterset has valid ClusterSelector",
+			clusterSetNames: []string{"clusterset1"},
+			initObjs: []runtime.Object{
+				testinghelpers.NewClusterSet("clusterset1").WithClusterSelector(clusterapiv1beta1.LegacyClusterSetLabel).Build(),
+				testinghelpers.NewManagedCluster("cluster1").WithLabel(clusterSetLabel, "clusterset1").Build(),
+			},
+			expectedClusterNames: []string{"cluster1"},
+		},
+		{
+			name:            "clusterset has invalid ClusterSelector",
+			clusterSetNames: []string{"clusterset1"},
+			initObjs: []runtime.Object{
+				testinghelpers.NewClusterSet("clusterset1").WithClusterSelector("FutureClusterSetLabel").Build(),
+				testinghelpers.NewManagedCluster("cluster1").WithLabel(clusterSetLabel, "clusterset1").Build(),
+			},
+			expectedClusterNames: []string{},
+		},
+		{
+			name:                 "clusterset is removed",
+			clusterSetNames:      []string{"clusterset1"},
+			initObjs:             []runtime.Object{},
+			expectedClusterNames: []string{},
 		},
 	}
 
@@ -410,13 +400,11 @@ func TestGetAvailableClusters(t *testing.T) {
 			clusterInformerFactory := testinghelpers.NewClusterInformerFactory(clusterClient, c.initObjs...)
 
 			ctrl := &schedulingController{
-				clusterLister: clusterInformerFactory.Cluster().V1().ManagedClusters().Lister(),
+				clusterLister:    clusterInformerFactory.Cluster().V1().ManagedClusters().Lister(),
+				clusterSetLister: clusterInformerFactory.Cluster().V1beta1().ManagedClusterSets().Lister(),
 			}
 
-			clusters, err := ctrl.getAvailableClusters(c.clusterSetNames)
-			if err != nil {
-				t.Errorf("unexpected err: %v", err)
-			}
+			clusters, _ := ctrl.getAvailableClusters(c.clusterSetNames)
 
 			expectedClusterNames := sets.NewString(c.expectedClusterNames...)
 			if len(clusters) != expectedClusterNames.Len() {
