@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"sort"
 	"time"
 
 	"k8s.io/apimachinery/pkg/labels"
@@ -87,37 +86,33 @@ func (pl *TaintToleration) RequeueAfter(ctx context.Context, placement *clustera
 		return plugins.PluginRequeueResult{}
 	}
 
-	requeueList := []*plugins.PluginRequeueResult{}
+	var minRequeue *plugins.PluginRequeueResult
 	// filter and record pluginRequeueResults
 	for _, cluster := range decisionClusters {
-		tolerated, requeue := isClusterTolerated(cluster, placement.Spec.Tolerations, decisionClusterNames.Has(cluster.Name))
-		if tolerated && requeue != nil {
-			requeueList = append(requeueList, requeue)
+		if tolerated, requeue := isClusterTolerated(cluster, placement.Spec.Tolerations, decisionClusterNames.Has(cluster.Name)); tolerated {
+			minRequeue = minRequeueTime(minRequeue, requeue)
 		}
 	}
 
-	requeueResult := minRequeueTime(requeueList)
-	if requeueResult == nil {
+	if minRequeue == nil {
 		return plugins.PluginRequeueResult{}
 	}
 
-	return *requeueResult
+	return *minRequeue
 }
 
 // isClusterTolerated returns true if a cluster is tolerated by the given toleration array
 func isClusterTolerated(cluster *clusterapiv1.ManagedCluster, tolerations []clusterapiv1beta1.Toleration, inDecision bool) (bool, *plugins.PluginRequeueResult) {
-	requeueList := []*plugins.PluginRequeueResult{}
+	var minRequeue *plugins.PluginRequeueResult
 	for _, taint := range cluster.Spec.Taints {
 		tolerated, requeue := isTaintTolerated(taint, tolerations, inDecision)
 		if !tolerated {
 			return false, nil
 		}
-		if requeue != nil {
-			requeueList = append(requeueList, requeue)
-		}
+		minRequeue = minRequeueTime(minRequeue, requeue)
 	}
 
-	return true, minRequeueTime(requeueList)
+	return true, minRequeue
 }
 
 // isTaintTolerated returns true if a taint is tolerated by the given toleration array
@@ -229,17 +224,22 @@ func getDecisionClusters(handle plugins.Handle, placement *clusterapiv1beta1.Pla
 }
 
 // return the PluginRequeueResult with minimal requeue time
-func minRequeueTime(requeueList []*plugins.PluginRequeueResult) *plugins.PluginRequeueResult {
-	if requeueList == nil || len(requeueList) <= 0 {
-		return nil
+func minRequeueTime(x, y *plugins.PluginRequeueResult) *plugins.PluginRequeueResult {
+	if x == nil {
+		return y
+	}
+	if y == nil {
+		return x
 	}
 
-	// sort requeueList and return the minimal RequeueTime
-	sort.SliceStable(requeueList, func(i, j int) bool {
-		t1 := requeueList[i].RequeueTime
-		t2 := requeueList[j].RequeueTime
-		return t1 != nil && t2 != nil && t1.Before(*t2)
-	})
-
-	return requeueList[0]
+	t1 := x.RequeueTime
+	t2 := y.RequeueTime
+	if t1 == nil || t2 == nil {
+		return nil
+	}
+	if t1.Before(*t2) {
+		return x
+	} else {
+		return y
+	}
 }
