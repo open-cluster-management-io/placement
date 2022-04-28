@@ -10,6 +10,7 @@ import (
 	testingclock "k8s.io/utils/clock/testing"
 	clusterapiv1 "open-cluster-management.io/api/cluster/v1"
 	clusterapivbeta1 "open-cluster-management.io/api/cluster/v1beta1"
+	"open-cluster-management.io/placement/pkg/controllers/framework"
 	testinghelpers "open-cluster-management.io/placement/pkg/helpers/testing"
 )
 
@@ -116,10 +117,11 @@ func TestScoreClusterWithAddOn(t *testing.T) {
 				scoreName:       "score1",
 			}
 
-			scoreResult := addon.Score(context.TODO(), c.placement, c.clusters)
+			scoreResult, status := addon.Score(context.TODO(), c.placement, c.clusters)
 			scores := scoreResult.Scores
-			err := scoreResult.Err
-			if err != nil {
+			err := status.AsError()
+
+			if status.Code() == framework.Error && err != nil {
 				t.Errorf("Expect no error, but got %v", err)
 			}
 

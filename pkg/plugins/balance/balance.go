@@ -7,6 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	clusterapiv1 "open-cluster-management.io/api/cluster/v1"
 	clusterapiv1beta1 "open-cluster-management.io/api/cluster/v1beta1"
+	"open-cluster-management.io/placement/pkg/controllers/framework"
 	"open-cluster-management.io/placement/pkg/plugins"
 )
 
@@ -43,7 +44,7 @@ func (b *Balance) Score(
 	ctx context.Context,
 	placement *clusterapiv1beta1.Placement,
 	clusters []*clusterapiv1.ManagedCluster,
-) plugins.PluginScoreResult {
+) (plugins.PluginScoreResult, *framework.Status) {
 	scores := map[string]int64{}
 	for _, cluster := range clusters {
 		scores[cluster.Name] = plugins.MaxClusterScore
@@ -51,9 +52,11 @@ func (b *Balance) Score(
 
 	decisions, err := b.handle.DecisionLister().List(labels.Everything())
 	if err != nil {
-		return plugins.PluginScoreResult{
-			Err: err,
-		}
+		return plugins.PluginScoreResult{}, framework.NewStatus(
+			b.Name(),
+			framework.Error,
+			err.Error(),
+		)
 	}
 
 	var maxCount int64
@@ -84,12 +87,12 @@ func (b *Balance) Score(
 
 	return plugins.PluginScoreResult{
 		Scores: scores,
-	}
+	}, framework.NewStatus(b.Name(), framework.Success, "")
 }
 
 func (b *Balance) RequeueAfter(
 	ctx context.Context,
 	placement *clusterapiv1beta1.Placement,
-) plugins.PluginRequeueResult {
-	return plugins.PluginRequeueResult{}
+) (plugins.PluginRequeueResult, *framework.Status) {
+	return plugins.PluginRequeueResult{}, framework.NewStatus(b.Name(), framework.Skip, "")
 }

@@ -31,6 +31,7 @@ import (
 	clusterlisterv1beta1 "open-cluster-management.io/api/client/cluster/listers/cluster/v1beta1"
 	clusterapiv1 "open-cluster-management.io/api/cluster/v1"
 	clusterapiv1beta1 "open-cluster-management.io/api/cluster/v1beta1"
+	"open-cluster-management.io/placement/pkg/controllers/framework"
 )
 
 const (
@@ -284,9 +285,29 @@ func (c *schedulingController) syncPlacement(
 	}
 
 	// schedule placement with scheduler
-	scheduleResult, err := c.scheduler.Schedule(ctx, placement, clusters)
-	if err != nil {
-		return err
+	scheduleResult, status := c.scheduler.Schedule(ctx, placement, clusters)
+	misconfiguredCondition := newMisconfiguredCondition(status)
+	satisfiedCondition := newSatisfiedCondition(
+		placement.Spec.ClusterSets,
+		clusterSetNames,
+		len(bindings),
+		len(clusters),
+		len(scheduleResult.Decisions()),
+		scheduleResult.NumOfUnscheduled(),
+		status,
+	)
+
+	if status.Code() == framework.Misconfigured || status.Code() == framework.Error {
+		if err := c.updateStatus(
+			ctx,
+			placement,
+			int32(len(scheduleResult.Decisions())),
+			misconfiguredCondition,
+			satisfiedCondition,
+		); err != nil {
+			return err
+		}
+		return status.AsError()
 	}
 
 	// requeue placement if requeueAfter is defined in scheduleResult
@@ -306,10 +327,9 @@ func (c *schedulingController) syncPlacement(
 	return c.updateStatus(
 		ctx,
 		placement,
-		clusterSetNames,
-		len(bindings),
-		len(clusters),
-		scheduleResult,
+		int32(len(scheduleResult.Decisions())),
+		satisfiedCondition,
+		misconfiguredCondition,
 	)
 }
 
@@ -432,27 +452,19 @@ func (c *schedulingController) getAvailableClusters(
 func (c *schedulingController) updateStatus(
 	ctx context.Context,
 	placement *clusterapiv1beta1.Placement,
-	eligibleClusterSetNames []string,
-	numOfBindings,
-	numOfAvailableClusters int,
-	scheduleResult ScheduleResult,
+	numberOfSelectedClusters int32,
+	conditions ...metav1.Condition,
 ) error {
 	newPlacement := placement.DeepCopy()
-	newPlacement.Status.NumberOfSelectedClusters = int32(len(scheduleResult.Decisions()))
+	newPlacement.Status.NumberOfSelectedClusters = numberOfSelectedClusters
 
-	satisfiedCondition := newSatisfiedCondition(
-		placement.Spec.ClusterSets,
-		eligibleClusterSetNames,
-		numOfBindings,
-		numOfAvailableClusters,
-		len(scheduleResult.Decisions()),
-		scheduleResult.NumOfUnscheduled(),
-	)
-
-	meta.SetStatusCondition(&newPlacement.Status.Conditions, satisfiedCondition)
+	for _, c := range conditions {
+		meta.SetStatusCondition(&newPlacement.Status.Conditions, c)
+	}
 	if reflect.DeepEqual(newPlacement.Status, placement.Status) {
 		return nil
 	}
+
 	_, err := c.clusterClient.ClusterV1beta1().
 		Placements(newPlacement.Namespace).
 		UpdateStatus(ctx, newPlacement, metav1.UpdateOptions{})
@@ -467,6 +479,7 @@ func newSatisfiedCondition(
 	numOfAvailableClusters,
 	numOfFeasibleClusters,
 	numOfUnscheduledDecisions int,
+	status *framework.Status,
 ) metav1.Condition {
 	condition := metav1.Condition{
 		Type: clusterapiv1beta1.PlacementConditionSatisfied,
@@ -490,6 +503,10 @@ func newSatisfiedCondition(
 			"All ManagedClusterSets [%s] have no member ManagedCluster",
 			strings.Join(eligibleClusterSets, ","),
 		)
+	case status.Code() == framework.Error:
+		condition.Status = metav1.ConditionFalse
+		condition.Reason = "NotAllDecisionsScheduled"
+		condition.Message = status.AsError().Error()
 	case numOfFeasibleClusters == 0:
 		condition.Status = metav1.ConditionFalse
 		condition.Reason = "NoManagedClusterMatched"
@@ -497,7 +514,11 @@ func newSatisfiedCondition(
 	case numOfUnscheduledDecisions == 0:
 		condition.Status = metav1.ConditionTrue
 		condition.Reason = "AllDecisionsScheduled"
-		condition.Message = "All cluster decisions scheduled"
+		if status.Code() == framework.Warning {
+			condition.Message = status.AsError().Error()
+		} else {
+			condition.Message = "All cluster decisions scheduled"
+		}
 	default:
 		condition.Status = metav1.ConditionFalse
 		condition.Reason = "NotAllDecisionsScheduled"
@@ -507,6 +528,24 @@ func newSatisfiedCondition(
 		)
 	}
 	return condition
+}
+
+func newMisconfiguredCondition(status *framework.Status) metav1.Condition {
+	if status.Code() == framework.Misconfigured {
+		return metav1.Condition{
+			Type:    clusterapiv1beta1.PlacementConditionMisconfigured,
+			Status:  metav1.ConditionTrue,
+			Reason:  "Misconfigured",
+			Message: "Placement configurations check failed",
+		}
+	} else {
+		return metav1.Condition{
+			Type:    clusterapiv1beta1.PlacementConditionMisconfigured,
+			Status:  metav1.ConditionFalse,
+			Reason:  "Succeedconfigured",
+			Message: "Placement configurations check pass",
+		}
+	}
 }
 
 // bind updates the cluster decisions in the status of the placementdecisions with the given

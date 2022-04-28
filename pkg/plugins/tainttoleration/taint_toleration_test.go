@@ -745,9 +745,9 @@ func TestMatchWithClusterTaintToleration(t *testing.T) {
 			p := &TaintToleration{
 				handle: testinghelpers.NewFakePluginHandle(t, nil, c.initObjs...),
 			}
-			result := p.Filter(context.TODO(), c.placement, c.clusters)
+			result, status := p.Filter(context.TODO(), c.placement, c.clusters)
 			clusters := result.Filtered
-			err := result.Err
+			err := status.AsError()
 
 			if err != nil && err.Error() != c.expectedErr.Error() {
 				t.Errorf("unexpected err: %v", err)
@@ -771,7 +771,7 @@ func TestMatchWithClusterTaintToleration(t *testing.T) {
 				)
 			}
 
-			requeueResult := p.RequeueAfter(context.TODO(), c.placement)
+			requeueResult, _ := p.RequeueAfter(context.TODO(), c.placement)
 			expectedRequeueTime := c.expectedRequeueResult.RequeueTime
 			actualRequeueTime := requeueResult.RequeueTime
 			if !((expectedRequeueTime == nil && actualRequeueTime == nil) ||

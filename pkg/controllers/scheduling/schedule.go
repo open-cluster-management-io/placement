@@ -14,6 +14,7 @@ import (
 	clusterlisterv1beta1 "open-cluster-management.io/api/client/cluster/listers/cluster/v1beta1"
 	clusterapiv1 "open-cluster-management.io/api/cluster/v1"
 	clusterapiv1beta1 "open-cluster-management.io/api/cluster/v1beta1"
+	"open-cluster-management.io/placement/pkg/controllers/framework"
 	"open-cluster-management.io/placement/pkg/plugins"
 	"open-cluster-management.io/placement/pkg/plugins/addon"
 	"open-cluster-management.io/placement/pkg/plugins/balance"
@@ -39,7 +40,7 @@ type Scheduler interface {
 		ctx context.Context,
 		placement *clusterapiv1beta1.Placement,
 		clusters []*clusterapiv1.ManagedCluster,
-	) (ScheduleResult, error)
+	) (ScheduleResult, *framework.Status)
 }
 
 type ScheduleResult interface {
@@ -167,8 +168,9 @@ func (s *pluginScheduler) Schedule(
 	ctx context.Context,
 	placement *clusterapiv1beta1.Placement,
 	clusters []*clusterapiv1.ManagedCluster,
-) (ScheduleResult, error) {
+) (ScheduleResult, *framework.Status) {
 	filtered := clusters
+	finalStatus := framework.NewStatus("", framework.Success, "")
 
 	results := &scheduleResult{
 		filteredRecords: map[string][]*clusterapiv1.ManagedCluster{},
@@ -179,12 +181,13 @@ func (s *pluginScheduler) Schedule(
 	filterPipline := []string{}
 
 	for _, f := range s.filters {
-		filterResult := f.Filter(ctx, placement, filtered)
+		filterResult, status := f.Filter(ctx, placement, filtered)
 		filtered = filterResult.Filtered
-		err := filterResult.Err
 
-		if err != nil {
-			return nil, err
+		if status.Code() == framework.Error || status.Code() == framework.Misconfigured {
+			return nil, status
+		} else if status.Code() == framework.Warning {
+			finalStatus = status
 		}
 
 		filterPipline = append(filterPipline, f.Name())
@@ -197,13 +200,13 @@ func (s *pluginScheduler) Schedule(
 	// For example, weights is {"Steady": 1, "Balance":1, "AddOn/default/ratio":3}.
 	weights, err := getWeights(s.prioritizerWeights, placement)
 	if err != nil {
-		return nil, err
+		return nil, framework.NewStatus("", framework.Misconfigured, err.Error())
 	}
 
 	// 2. Generate prioritizers for each placement whose weight != 0.
 	prioritizers, err := getPrioritizers(weights, s.handle)
 	if err != nil {
-		return nil, err
+		return nil, framework.NewStatus("", framework.Misconfigured, err.Error())
 	}
 
 	// 3. Calculate clusters scores.
@@ -213,12 +216,13 @@ func (s *pluginScheduler) Schedule(
 	}
 	for sc, p := range prioritizers {
 		// Get cluster score.
-		scoreResult := p.Score(ctx, placement, filtered)
+		scoreResult, status := p.Score(ctx, placement, filtered)
 		score := scoreResult.Scores
-		err := scoreResult.Err
 
-		if err != nil {
-			return nil, err
+		if status.Code() == framework.Error || status.Code() == framework.Misconfigured {
+			return nil, status
+		} else if status.Code() == framework.Warning {
+			finalStatus = status
 		}
 
 		// Record prioritizer score and weight
@@ -260,19 +264,19 @@ func (s *pluginScheduler) Schedule(
 
 	// set placement requeue time
 	for _, f := range s.filters {
-		if r := f.RequeueAfter(ctx, placement); r.RequeueTime != nil {
+		if r, _ := f.RequeueAfter(ctx, placement); r.RequeueTime != nil {
 			newRequeueAfter := time.Until(*r.RequeueTime)
 			results.requeueAfter = setRequeueAfter(results.requeueAfter, &newRequeueAfter)
 		}
 	}
 	for _, p := range prioritizers {
-		if r := p.RequeueAfter(ctx, placement); r.RequeueTime != nil {
+		if r, _ := p.RequeueAfter(ctx, placement); r.RequeueTime != nil {
 			newRequeueAfter := time.Until(*r.RequeueTime)
 			results.requeueAfter = setRequeueAfter(results.requeueAfter, &newRequeueAfter)
 		}
 	}
 
-	return results, nil
+	return results, finalStatus
 }
 
 // makeClusterDecisions selects clusters based on given cluster slice and then creates
@@ -374,12 +378,10 @@ func getPrioritizers(
 					WithPrioritizerName(k.BuiltIn).
 					Build()
 			default:
-				//TODO: show the failure in placement.status conditions
 				return nil, fmt.Errorf("incorrect builtin prioritizer: %s", k.BuiltIn)
 			}
 		} else {
 			if k.AddOn == nil {
-				//TODO: show the failure in placement.status conditions
 				return nil, fmt.Errorf("addOn should not be empty")
 			}
 			result[k] = addon.NewAddOnPrioritizerBuilder(handle).WithResourceName(k.AddOn.ResourceName).WithScoreName(k.AddOn.ScoreName).Build()
