@@ -66,7 +66,11 @@ func (c *AddOn) Description() string {
 	return description
 }
 
-func (c *AddOn) Score(ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) plugins.PluginScoreResult {
+func (c *AddOn) Score(
+	ctx context.Context,
+	placement *clusterapiv1beta1.Placement,
+	clusters []*clusterapiv1.ManagedCluster,
+) plugins.PluginScoreResult {
 	scores := map[string]int64{}
 	expiredScores := ""
 
@@ -76,14 +80,17 @@ func (c *AddOn) Score(ctx context.Context, placement *clusterapiv1beta1.Placemen
 		scores[cluster.Name] = 0
 
 		// get AddOnPlacementScores CR with resourceName
-		addOnScores, err := c.handle.ScoreLister().AddOnPlacementScores(namespace).Get(c.resourceName)
+		addOnScores, err := c.handle.ScoreLister().
+			AddOnPlacementScores(namespace).
+			Get(c.resourceName)
 		if err != nil {
 			klog.Warningf("Getting AddOnPlacementScores failed: %s", err)
 			continue
 		}
 
 		// check score valid time
-		if (addOnScores.Status.ValidUntil != nil) && AddOnClock.Now().After(addOnScores.Status.ValidUntil.Time) {
+		if (addOnScores.Status.ValidUntil != nil) &&
+			AddOnClock.Now().After(addOnScores.Status.ValidUntil.Time) {
 			expiredScores = fmt.Sprintf("%s %s/%s", expiredScores, namespace, c.resourceName)
 			continue
 		}
@@ -109,6 +116,9 @@ func (c *AddOn) Score(ctx context.Context, placement *clusterapiv1beta1.Placemen
 	}
 }
 
-func (c *AddOn) RequeueAfter(ctx context.Context, placement *clusterapiv1beta1.Placement) plugins.PluginRequeueResult {
+func (c *AddOn) RequeueAfter(
+	ctx context.Context,
+	placement *clusterapiv1beta1.Placement,
+) plugins.PluginRequeueResult {
 	return plugins.PluginRequeueResult{}
 }

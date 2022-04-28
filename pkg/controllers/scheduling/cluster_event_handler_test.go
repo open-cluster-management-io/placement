@@ -30,7 +30,9 @@ func TestOnClusterChange(t *testing.T) {
 		},
 		{
 			name: "clusterset does not exist",
-			obj:  testinghelpers.NewManagedCluster("cluster1").WithLabel(clusterSetLabel, "clusterset1").Build(),
+			obj: testinghelpers.NewManagedCluster("cluster1").
+				WithLabel(clusterSetLabel, "clusterset1").
+				Build(),
 			initObjs: []runtime.Object{
 				testinghelpers.NewClusterSetBinding("ns1", "clusterset1"),
 				testinghelpers.NewPlacement("ns1", "placement1").Build(),
@@ -39,7 +41,9 @@ func TestOnClusterChange(t *testing.T) {
 		},
 		{
 			name: "clusterset exists",
-			obj:  testinghelpers.NewManagedCluster("cluster1").WithLabel(clusterSetLabel, "clusterset1").Build(),
+			obj: testinghelpers.NewManagedCluster("cluster1").
+				WithLabel(clusterSetLabel, "clusterset1").
+				Build(),
 			initObjs: []runtime.Object{
 				testinghelpers.NewClusterSet("clusterset1").Build(),
 				testinghelpers.NewClusterSet("clusterset2").Build(),
@@ -47,8 +51,12 @@ func TestOnClusterChange(t *testing.T) {
 				testinghelpers.NewClusterSetBinding("ns2", "clusterset1"),
 				testinghelpers.NewClusterSetBinding("ns2", "clusterset2"),
 				testinghelpers.NewPlacement("ns1", "placement1").Build(),
-				testinghelpers.NewPlacement("ns2", "placement2").WithClusterSets("clusterset1").Build(),
-				testinghelpers.NewPlacement("ns2", "placement3").WithClusterSets("clusterset2").Build(),
+				testinghelpers.NewPlacement("ns2", "placement2").
+					WithClusterSets("clusterset1").
+					Build(),
+				testinghelpers.NewPlacement("ns2", "placement3").
+					WithClusterSets("clusterset2").
+					Build(),
 			},
 			queuedKeys: []string{
 				"ns1/placement1",
@@ -60,13 +68,24 @@ func TestOnClusterChange(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			clusterClient := clusterfake.NewSimpleClientset(c.initObjs...)
-			clusterInformerFactory := testinghelpers.NewClusterInformerFactory(clusterClient, c.initObjs...)
+			clusterInformerFactory := testinghelpers.NewClusterInformerFactory(
+				clusterClient,
+				c.initObjs...)
 
 			queuedKeys := sets.NewString()
 			handler := &clusterEventHandler{
-				clusterSetLister:        clusterInformerFactory.Cluster().V1beta1().ManagedClusterSets().Lister(),
-				clusterSetBindingLister: clusterInformerFactory.Cluster().V1beta1().ManagedClusterSetBindings().Lister(),
-				placementLister:         clusterInformerFactory.Cluster().V1beta1().Placements().Lister(),
+				clusterSetLister: clusterInformerFactory.Cluster().
+					V1beta1().
+					ManagedClusterSets().
+					Lister(),
+				clusterSetBindingLister: clusterInformerFactory.Cluster().
+					V1beta1().
+					ManagedClusterSetBindings().
+					Lister(),
+				placementLister: clusterInformerFactory.Cluster().
+					V1beta1().
+					Placements().
+					Lister(),
 				enqueuePlacementFunc: func(namespace, name string) {
 					queuedKeys.Insert(fmt.Sprintf("%s/%s", namespace, name))
 				},
@@ -75,7 +94,11 @@ func TestOnClusterChange(t *testing.T) {
 			handler.onChange(c.obj)
 			expectedQueuedKeys := sets.NewString(c.queuedKeys...)
 			if !queuedKeys.Equal(expectedQueuedKeys) {
-				t.Errorf("expected queued placements %q, but got %s", strings.Join(expectedQueuedKeys.List(), ","), strings.Join(queuedKeys.List(), ","))
+				t.Errorf(
+					"expected queued placements %q, but got %s",
+					strings.Join(expectedQueuedKeys.List(), ","),
+					strings.Join(queuedKeys.List(), ","),
+				)
 			}
 		})
 	}
@@ -90,15 +113,21 @@ func TestOnClusterUpdate(t *testing.T) {
 		queuedKeys []string
 	}{
 		{
-			name:   "cluster belongs to no clusterset",
-			newObj: testinghelpers.NewManagedCluster("cluster1").WithLabel("cloud", "Amazon").Build(),
-			oldObj: testinghelpers.NewManagedCluster("cluster1").WithLabel("cloud", "Google").Build(),
+			name: "cluster belongs to no clusterset",
+			newObj: testinghelpers.NewManagedCluster("cluster1").
+				WithLabel("cloud", "Amazon").
+				Build(),
+			oldObj: testinghelpers.NewManagedCluster("cluster1").
+				WithLabel("cloud", "Google").
+				Build(),
 		},
 		{
 			name: "assign a cluster to a clusterset",
 			newObj: testinghelpers.NewManagedCluster("cluster1").
 				WithLabel(clusterSetLabel, "clusterset1").WithLabel("cloud", "Amazon").Build(),
-			oldObj: testinghelpers.NewManagedCluster("cluster1").WithLabel("cloud", "Amazon").Build(),
+			oldObj: testinghelpers.NewManagedCluster("cluster1").
+				WithLabel("cloud", "Amazon").
+				Build(),
 			initObjs: []runtime.Object{
 				testinghelpers.NewClusterSet("clusterset1").Build(),
 				testinghelpers.NewClusterSetBinding("ns1", "clusterset1"),
@@ -109,8 +138,10 @@ func TestOnClusterUpdate(t *testing.T) {
 			},
 		},
 		{
-			name:   "remove cluster from a clusterset",
-			newObj: testinghelpers.NewManagedCluster("cluster1").WithLabel("cloud", "Amazon").Build(),
+			name: "remove cluster from a clusterset",
+			newObj: testinghelpers.NewManagedCluster("cluster1").
+				WithLabel("cloud", "Amazon").
+				Build(),
 			oldObj: testinghelpers.NewManagedCluster("cluster1").
 				WithLabel(clusterSetLabel, "clusterset1").WithLabel("cloud", "Amazon").Build(),
 			initObjs: []runtime.Object{
@@ -161,13 +192,24 @@ func TestOnClusterUpdate(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			clusterClient := clusterfake.NewSimpleClientset(c.initObjs...)
-			clusterInformerFactory := testinghelpers.NewClusterInformerFactory(clusterClient, c.initObjs...)
+			clusterInformerFactory := testinghelpers.NewClusterInformerFactory(
+				clusterClient,
+				c.initObjs...)
 
 			queuedKeys := sets.NewString()
 			handler := &clusterEventHandler{
-				clusterSetLister:        clusterInformerFactory.Cluster().V1beta1().ManagedClusterSets().Lister(),
-				clusterSetBindingLister: clusterInformerFactory.Cluster().V1beta1().ManagedClusterSetBindings().Lister(),
-				placementLister:         clusterInformerFactory.Cluster().V1beta1().Placements().Lister(),
+				clusterSetLister: clusterInformerFactory.Cluster().
+					V1beta1().
+					ManagedClusterSets().
+					Lister(),
+				clusterSetBindingLister: clusterInformerFactory.Cluster().
+					V1beta1().
+					ManagedClusterSetBindings().
+					Lister(),
+				placementLister: clusterInformerFactory.Cluster().
+					V1beta1().
+					Placements().
+					Lister(),
 				enqueuePlacementFunc: func(namespace, name string) {
 					queuedKeys.Insert(fmt.Sprintf("%s/%s", namespace, name))
 				},
@@ -176,7 +218,11 @@ func TestOnClusterUpdate(t *testing.T) {
 			handler.OnUpdate(c.oldObj, c.newObj)
 			expectedQueuedKeys := sets.NewString(c.queuedKeys...)
 			if !queuedKeys.Equal(expectedQueuedKeys) {
-				t.Errorf("expected queued placements %q, but got %s", strings.Join(expectedQueuedKeys.List(), ","), strings.Join(queuedKeys.List(), ","))
+				t.Errorf(
+					"expected queued placements %q, but got %s",
+					strings.Join(expectedQueuedKeys.List(), ","),
+					strings.Join(queuedKeys.List(), ","),
+				)
 			}
 		})
 	}
@@ -195,7 +241,9 @@ func TestOnClusterDelete(t *testing.T) {
 		},
 		{
 			name: "cluster",
-			obj:  testinghelpers.NewManagedCluster("cluster1").WithLabel(clusterSetLabel, "clusterset1").Build(),
+			obj: testinghelpers.NewManagedCluster("cluster1").
+				WithLabel(clusterSetLabel, "clusterset1").
+				Build(),
 			initObjs: []runtime.Object{
 				testinghelpers.NewClusterSet("clusterset1").Build(),
 				testinghelpers.NewClusterSetBinding("ns1", "clusterset1"),
@@ -208,7 +256,9 @@ func TestOnClusterDelete(t *testing.T) {
 		{
 			name: "tombstone",
 			obj: cache.DeletedFinalStateUnknown{
-				Obj: testinghelpers.NewManagedCluster("cluster1").WithLabel(clusterSetLabel, "clusterset1").Build(),
+				Obj: testinghelpers.NewManagedCluster("cluster1").
+					WithLabel(clusterSetLabel, "clusterset1").
+					Build(),
 			},
 			initObjs: []runtime.Object{
 				testinghelpers.NewClusterSet("clusterset1").Build(),
@@ -235,13 +285,24 @@ func TestOnClusterDelete(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			clusterClient := clusterfake.NewSimpleClientset(c.initObjs...)
-			clusterInformerFactory := testinghelpers.NewClusterInformerFactory(clusterClient, c.initObjs...)
+			clusterInformerFactory := testinghelpers.NewClusterInformerFactory(
+				clusterClient,
+				c.initObjs...)
 
 			queuedKeys := sets.NewString()
 			handler := &clusterEventHandler{
-				clusterSetLister:        clusterInformerFactory.Cluster().V1beta1().ManagedClusterSets().Lister(),
-				clusterSetBindingLister: clusterInformerFactory.Cluster().V1beta1().ManagedClusterSetBindings().Lister(),
-				placementLister:         clusterInformerFactory.Cluster().V1beta1().Placements().Lister(),
+				clusterSetLister: clusterInformerFactory.Cluster().
+					V1beta1().
+					ManagedClusterSets().
+					Lister(),
+				clusterSetBindingLister: clusterInformerFactory.Cluster().
+					V1beta1().
+					ManagedClusterSetBindings().
+					Lister(),
+				placementLister: clusterInformerFactory.Cluster().
+					V1beta1().
+					Placements().
+					Lister(),
 				enqueuePlacementFunc: func(namespace, name string) {
 					queuedKeys.Insert(fmt.Sprintf("%s/%s", namespace, name))
 				},
@@ -250,7 +311,11 @@ func TestOnClusterDelete(t *testing.T) {
 			handler.OnDelete(c.obj)
 			expectedQueuedKeys := sets.NewString(c.queuedKeys...)
 			if !queuedKeys.Equal(expectedQueuedKeys) {
-				t.Errorf("expected queued placements %q, but got %s", strings.Join(expectedQueuedKeys.List(), ","), strings.Join(queuedKeys.List(), ","))
+				t.Errorf(
+					"expected queued placements %q, but got %s",
+					strings.Join(expectedQueuedKeys.List(), ","),
+					strings.Join(queuedKeys.List(), ","),
+				)
 			}
 		})
 	}

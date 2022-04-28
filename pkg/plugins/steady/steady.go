@@ -42,10 +42,17 @@ func (s *Steady) Description() string {
 }
 
 func (s *Steady) Score(
-	ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) plugins.PluginScoreResult {
+	ctx context.Context,
+	placement *clusterapiv1beta1.Placement,
+	clusters []*clusterapiv1.ManagedCluster,
+) plugins.PluginScoreResult {
 	// query placementdecisions with label selector
 	scores := map[string]int64{}
-	requirement, err := labels.NewRequirement(placementLabel, selection.Equals, []string{placement.Name})
+	requirement, err := labels.NewRequirement(
+		placementLabel,
+		selection.Equals,
+		[]string{placement.Name},
+	)
 
 	if err != nil {
 		return plugins.PluginScoreResult{
@@ -54,7 +61,9 @@ func (s *Steady) Score(
 	}
 
 	labelSelector := labels.NewSelector().Add(*requirement)
-	decisions, err := s.handle.DecisionLister().PlacementDecisions(placement.Namespace).List(labelSelector)
+	decisions, err := s.handle.DecisionLister().
+		PlacementDecisions(placement.Namespace).
+		List(labelSelector)
 
 	if err != nil {
 		return plugins.PluginScoreResult{
@@ -82,6 +91,9 @@ func (s *Steady) Score(
 	}
 }
 
-func (s *Steady) RequeueAfter(ctx context.Context, placement *clusterapiv1beta1.Placement) plugins.PluginRequeueResult {
+func (s *Steady) RequeueAfter(
+	ctx context.Context,
+	placement *clusterapiv1beta1.Placement,
+) plugins.PluginRequeueResult {
 	return plugins.PluginRequeueResult{}
 }

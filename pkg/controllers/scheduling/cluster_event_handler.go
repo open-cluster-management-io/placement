@@ -81,7 +81,11 @@ func (h *clusterEventHandler) onChange(obj interface{}) {
 		h.enqueuePlacementFunc,
 	)
 	if err != nil {
-		klog.Errorf("Unable to enqueue placements with access to clusterset %q: %v", clusterSetName, err)
+		klog.Errorf(
+			"Unable to enqueue placements with access to clusterset %q: %v",
+			clusterSetName,
+			err,
+		)
 	}
 }
 

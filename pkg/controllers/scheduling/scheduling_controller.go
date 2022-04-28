@@ -201,7 +201,8 @@ func (c *schedulingController) resync(ctx context.Context, syncCtx factory.SyncC
 
 		for _, placement := range placements {
 			for _, config := range placement.Spec.PrioritizerPolicy.Configurations {
-				if config.ScoreCoordinate != nil && config.ScoreCoordinate.Type == clusterapiv1beta1.ScoreCoordinateTypeAddOn {
+				if config.ScoreCoordinate != nil &&
+					config.ScoreCoordinate.Type == clusterapiv1beta1.ScoreCoordinateTypeAddOn {
 					key, _ := cache.MetaNamespaceKeyFunc(placement)
 					klog.V(4).Infof("Requeue placement %s", key)
 					syncCtx.Queue().Add(key)
@@ -257,7 +258,11 @@ func (c *schedulingController) getPlacement(queueKey string) (*clusterapiv1beta1
 	return placement, nil
 }
 
-func (c *schedulingController) syncPlacement(ctx context.Context, syncCtx factory.SyncContext, placement *clusterapiv1beta1.Placement) error {
+func (c *schedulingController) syncPlacement(
+	ctx context.Context,
+	syncCtx factory.SyncContext,
+	placement *clusterapiv1beta1.Placement,
+) error {
 	// no work if placement is deleting
 	if !placement.DeletionTimestamp.IsZero() {
 		return nil
@@ -298,13 +303,23 @@ func (c *schedulingController) syncPlacement(ctx context.Context, syncCtx factor
 	}
 
 	// update placement status if necessary to signal no bindings
-	return c.updateStatus(ctx, placement, clusterSetNames, len(bindings), len(clusters), scheduleResult)
+	return c.updateStatus(
+		ctx,
+		placement,
+		clusterSetNames,
+		len(bindings),
+		len(clusters),
+		scheduleResult,
+	)
 }
 
 // getManagedClusterSetBindings returns all bindings found in the placement namespace.
-func (c *schedulingController) getValidManagedClusterSetBindings(placementNamespace string) ([]*clusterapiv1beta1.ManagedClusterSetBinding, error) {
+func (c *schedulingController) getValidManagedClusterSetBindings(
+	placementNamespace string,
+) ([]*clusterapiv1beta1.ManagedClusterSetBinding, error) {
 	// get all clusterset bindings under the placement namespace
-	bindings, err := c.clusterSetBindingLister.ManagedClusterSetBindings(placementNamespace).List(labels.Everything())
+	bindings, err := c.clusterSetBindingLister.ManagedClusterSetBindings(placementNamespace).
+		List(labels.Everything())
 	if err != nil {
 		return nil, err
 	}
@@ -329,7 +344,10 @@ func (c *schedulingController) getValidManagedClusterSetBindings(placementNamesp
 }
 
 // getEligibleClusterSets returns the names of clusterset that eligible for the placement
-func (c *schedulingController) getEligibleClusterSets(placement *clusterapiv1beta1.Placement, bindings []*clusterapiv1beta1.ManagedClusterSetBinding) []string {
+func (c *schedulingController) getEligibleClusterSets(
+	placement *clusterapiv1beta1.Placement,
+	bindings []*clusterapiv1beta1.ManagedClusterSetBinding,
+) []string {
 	// filter out invaid clustersetbindings
 	clusterSetNames := sets.NewString()
 	for _, binding := range bindings {
@@ -339,7 +357,9 @@ func (c *schedulingController) getEligibleClusterSets(placement *clusterapiv1bet
 	// get intersection of clustesets bound to placement namespace and clustesets specified
 	// in placement spec
 	if len(placement.Spec.ClusterSets) != 0 {
-		clusterSetNames = clusterSetNames.Intersection(sets.NewString(placement.Spec.ClusterSets...))
+		clusterSetNames = clusterSetNames.Intersection(
+			sets.NewString(placement.Spec.ClusterSets...),
+		)
 	}
 
 	return clusterSetNames.List()
@@ -348,7 +368,9 @@ func (c *schedulingController) getEligibleClusterSets(placement *clusterapiv1bet
 // getAvailableClusters returns available clusters for the given placement. The clusters must
 // 1) Be from clustersets bound to the placement namespace;
 // 2) Belong to one of particular clustersets if .spec.clusterSets is specified;
-func (c *schedulingController) getAvailableClusters(clusterSetNames []string) ([]*clusterapiv1.ManagedCluster, error) {
+func (c *schedulingController) getAvailableClusters(
+	clusterSetNames []string,
+) ([]*clusterapiv1.ManagedCluster, error) {
 	if len(clusterSetNames) == 0 {
 		return nil, nil
 	}
@@ -431,7 +453,9 @@ func (c *schedulingController) updateStatus(
 	if reflect.DeepEqual(newPlacement.Status, placement.Status) {
 		return nil
 	}
-	_, err := c.clusterClient.ClusterV1beta1().Placements(newPlacement.Namespace).UpdateStatus(ctx, newPlacement, metav1.UpdateOptions{})
+	_, err := c.clusterClient.ClusterV1beta1().
+		Placements(newPlacement.Namespace).
+		UpdateStatus(ctx, newPlacement, metav1.UpdateOptions{})
 	return err
 }
 
@@ -455,11 +479,17 @@ func newSatisfiedCondition(
 	case len(eligibleClusterSets) == 0:
 		condition.Status = metav1.ConditionFalse
 		condition.Reason = "NoIntersection"
-		condition.Message = fmt.Sprintf("None of ManagedClusterSets [%s] is bound to placement namespace", strings.Join(clusterSetsInSpec, ","))
+		condition.Message = fmt.Sprintf(
+			"None of ManagedClusterSets [%s] is bound to placement namespace",
+			strings.Join(clusterSetsInSpec, ","),
+		)
 	case numOfAvailableClusters == 0:
 		condition.Status = metav1.ConditionFalse
 		condition.Reason = "AllManagedClusterSetsEmpty"
-		condition.Message = fmt.Sprintf("All ManagedClusterSets [%s] have no member ManagedCluster", strings.Join(eligibleClusterSets, ","))
+		condition.Message = fmt.Sprintf(
+			"All ManagedClusterSets [%s] have no member ManagedCluster",
+			strings.Join(eligibleClusterSets, ","),
+		)
 	case numOfFeasibleClusters == 0:
 		condition.Status = metav1.ConditionFalse
 		condition.Reason = "NoManagedClusterMatched"
@@ -471,7 +501,10 @@ func newSatisfiedCondition(
 	default:
 		condition.Status = metav1.ConditionFalse
 		condition.Reason = "NotAllDecisionsScheduled"
-		condition.Message = fmt.Sprintf("%d cluster decisions unscheduled", numOfUnscheduledDecisions)
+		condition.Message = fmt.Sprintf(
+			"%d cluster decisions unscheduled",
+			numOfUnscheduledDecisions,
+		)
 	}
 	return condition
 }
@@ -524,12 +557,17 @@ func (c *schedulingController) bind(
 	}
 
 	// query all placementdecisions of the placement
-	requirement, err := labels.NewRequirement(placementLabel, selection.Equals, []string{placement.Name})
+	requirement, err := labels.NewRequirement(
+		placementLabel,
+		selection.Equals,
+		[]string{placement.Name},
+	)
 	if err != nil {
 		return err
 	}
 	labelSelector := labels.NewSelector().Add(*requirement)
-	placementDecisions, err := c.placementDecisionLister.PlacementDecisions(placement.Namespace).List(labelSelector)
+	placementDecisions, err := c.placementDecisionLister.PlacementDecisions(placement.Namespace).
+		List(labelSelector)
 	if err != nil {
 		return err
 	}
@@ -549,9 +587,16 @@ func (c *schedulingController) bind(
 			errs = append(errs, err)
 		}
 		c.recorder.Eventf(
-			placement, placementDecision, corev1.EventTypeNormal,
-			"DecisionDelete", "DecisionDeleted",
-			"Decision %s is deleted with placement %s in namespace %s", placementDecision.Name, placement.Name, placement.Namespace)
+			placement,
+			placementDecision,
+			corev1.EventTypeNormal,
+			"DecisionDelete",
+			"DecisionDeleted",
+			"Decision %s is deleted with placement %s in namespace %s",
+			placementDecision.Name,
+			placement.Name,
+			placement.Namespace,
+		)
 	}
 	return errorhelpers.NewMultiLineAggregate(errs)
 }
@@ -566,14 +611,22 @@ func (c *schedulingController) createOrUpdatePlacementDecision(
 	clusterScores PrioritizerScore,
 ) error {
 	if len(clusterDecisions) > maxNumOfClusterDecisions {
-		return fmt.Errorf("the number of clusterdecisions %q exceeds the max limitation %q", len(clusterDecisions), maxNumOfClusterDecisions)
+		return fmt.Errorf(
+			"the number of clusterdecisions %q exceeds the max limitation %q",
+			len(clusterDecisions),
+			maxNumOfClusterDecisions,
+		)
 	}
 
-	placementDecision, err := c.placementDecisionLister.PlacementDecisions(placement.Namespace).Get(placementDecisionName)
+	placementDecision, err := c.placementDecisionLister.PlacementDecisions(placement.Namespace).
+		Get(placementDecisionName)
 	switch {
 	case errors.IsNotFound(err):
 		// create the placementdecision if not exists
-		owner := metav1.NewControllerRef(placement, clusterapiv1beta1.GroupVersion.WithKind("Placement"))
+		owner := metav1.NewControllerRef(
+			placement,
+			clusterapiv1beta1.GroupVersion.WithKind("Placement"),
+		)
 		placementDecision = &clusterapiv1beta1.PlacementDecision{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      placementDecisionName,
@@ -591,9 +644,16 @@ func (c *schedulingController) createOrUpdatePlacementDecision(
 			return err
 		}
 		c.recorder.Eventf(
-			placement, placementDecision, corev1.EventTypeNormal,
-			"DecisionCreate", "DecisionCreated",
-			"Decision %s is created with placement %s in namespace %s", placementDecision.Name, placement.Name, placement.Namespace)
+			placement,
+			placementDecision,
+			corev1.EventTypeNormal,
+			"DecisionCreate",
+			"DecisionCreated",
+			"Decision %s is created with placement %s in namespace %s",
+			placementDecision.Name,
+			placement.Name,
+			placement.Namespace,
+		)
 	case err != nil:
 		return err
 	}
@@ -605,7 +665,8 @@ func (c *schedulingController) createOrUpdatePlacementDecision(
 
 	newPlacementDecision := placementDecision.DeepCopy()
 	newPlacementDecision.Status.Decisions = clusterDecisions
-	newPlacementDecision, err = c.clusterClient.ClusterV1beta1().PlacementDecisions(newPlacementDecision.Namespace).
+	newPlacementDecision, err = c.clusterClient.ClusterV1beta1().
+		PlacementDecisions(newPlacementDecision.Namespace).
 		UpdateStatus(ctx, newPlacementDecision, metav1.UpdateOptions{})
 
 	if err != nil {
@@ -613,9 +674,16 @@ func (c *schedulingController) createOrUpdatePlacementDecision(
 	}
 
 	c.recorder.Eventf(
-		placement, placementDecision, corev1.EventTypeNormal,
-		"DecisionUpdate", "DecisionUpdated",
-		"Decision %s is updated with placement %s in namespace %s", placementDecision.Name, placement.Name, placement.Namespace)
+		placement,
+		placementDecision,
+		corev1.EventTypeNormal,
+		"DecisionUpdate",
+		"DecisionUpdated",
+		"Decision %s is updated with placement %s in namespace %s",
+		placementDecision.Name,
+		placement.Name,
+		placement.Namespace,
+	)
 
 	// update the event with prioritizer score.
 	scoreStr := ""

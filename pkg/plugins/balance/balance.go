@@ -39,7 +39,11 @@ func (b *Balance) Description() string {
 	return description
 }
 
-func (b *Balance) Score(ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) plugins.PluginScoreResult {
+func (b *Balance) Score(
+	ctx context.Context,
+	placement *clusterapiv1beta1.Placement,
+	clusters []*clusterapiv1.ManagedCluster,
+) plugins.PluginScoreResult {
 	scores := map[string]int64{}
 	for _, cluster := range clusters {
 		scores[cluster.Name] = plugins.MaxClusterScore
@@ -56,7 +60,8 @@ func (b *Balance) Score(ctx context.Context, placement *clusterapiv1beta1.Placem
 	decisionCount := map[string]int64{}
 	for _, decision := range decisions {
 		// Do not count the decision that is being scheduled.
-		if decision.Labels[placementLabel] == placement.Name && decision.Namespace == placement.Namespace {
+		if decision.Labels[placementLabel] == placement.Name &&
+			decision.Namespace == placement.Namespace {
 			continue
 		}
 		for _, d := range decision.Status.Decisions {
@@ -82,6 +87,9 @@ func (b *Balance) Score(ctx context.Context, placement *clusterapiv1beta1.Placem
 	}
 }
 
-func (b *Balance) RequeueAfter(ctx context.Context, placement *clusterapiv1beta1.Placement) plugins.PluginRequeueResult {
+func (b *Balance) RequeueAfter(
+	ctx context.Context,
+	placement *clusterapiv1beta1.Placement,
+) plugins.PluginRequeueResult {
 	return plugins.PluginRequeueResult{}
 }

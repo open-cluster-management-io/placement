@@ -96,7 +96,12 @@ type schedulerHandler struct {
 }
 
 func NewSchedulerHandler(
-	clusterClient clusterclient.Interface, placementDecisionLister clusterlisterv1beta1.PlacementDecisionLister, scoreLister clusterlisterv1alpha1.AddOnPlacementScoreLister, clusterLister clusterlisterv1.ManagedClusterLister, recorder kevents.EventRecorder) plugins.Handle {
+	clusterClient clusterclient.Interface,
+	placementDecisionLister clusterlisterv1beta1.PlacementDecisionLister,
+	scoreLister clusterlisterv1alpha1.AddOnPlacementScoreLister,
+	clusterLister clusterlisterv1.ManagedClusterLister,
+	recorder kevents.EventRecorder,
+) plugins.Handle {
 
 	return &schedulerHandler{
 		recorder:                recorder,
@@ -218,7 +223,10 @@ func (s *pluginScheduler) Schedule(
 
 		// Record prioritizer score and weight
 		weight := weights[sc]
-		results.scoreRecords = append(results.scoreRecords, PrioritizerResult{Name: p.Name(), Weight: weight, Scores: score})
+		results.scoreRecords = append(
+			results.scoreRecords,
+			PrioritizerResult{Name: p.Name(), Weight: weight, Scores: score},
+		)
 
 		// The final score is a sum of each prioritizer score * weight.
 		// A higher weight indicates that the prioritizer weights more in the cluster selection,
@@ -269,7 +277,10 @@ func (s *pluginScheduler) Schedule(
 
 // makeClusterDecisions selects clusters based on given cluster slice and then creates
 // cluster decisions.
-func selectClusters(placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) []clusterapiv1beta1.ClusterDecision {
+func selectClusters(
+	placement *clusterapiv1beta1.Placement,
+	clusters []*clusterapiv1.ManagedCluster,
+) []clusterapiv1beta1.ClusterDecision {
 	numOfDecisions := len(clusters)
 	if placement.Spec.NumberOfClusters != nil {
 		numOfDecisions = int(*placement.Spec.NumberOfClusters)
@@ -306,7 +317,10 @@ func setRequeueAfter(requeueAfter, newRequeueAfter *time.Duration) *time.Duratio
 // Get prioritizer weight for the placement.
 // In Additive and "" mode, will override defaultWeight with what placement has defined and return.
 // In Exact mode, will return the name and weight defined in placement.
-func getWeights(defaultWeight map[clusterapiv1beta1.ScoreCoordinate]int32, placement *clusterapiv1beta1.Placement) (map[clusterapiv1beta1.ScoreCoordinate]int32, error) {
+func getWeights(
+	defaultWeight map[clusterapiv1beta1.ScoreCoordinate]int32,
+	placement *clusterapiv1beta1.Placement,
+) (map[clusterapiv1beta1.ScoreCoordinate]int32, error) {
 	mode := placement.Spec.PrioritizerPolicy.Mode
 	switch {
 	case mode == clusterapiv1beta1.PrioritizerPolicyModeExact:
@@ -318,7 +332,10 @@ func getWeights(defaultWeight map[clusterapiv1beta1.ScoreCoordinate]int32, place
 	}
 }
 
-func mergeWeights(defaultWeight map[clusterapiv1beta1.ScoreCoordinate]int32, customizedWeight []clusterapiv1beta1.PrioritizerConfig) (map[clusterapiv1beta1.ScoreCoordinate]int32, error) {
+func mergeWeights(
+	defaultWeight map[clusterapiv1beta1.ScoreCoordinate]int32,
+	customizedWeight []clusterapiv1beta1.PrioritizerConfig,
+) (map[clusterapiv1beta1.ScoreCoordinate]int32, error) {
 	weights := make(map[clusterapiv1beta1.ScoreCoordinate]int32)
 	// copy the default weight
 	for sc, w := range defaultWeight {
@@ -337,7 +354,10 @@ func mergeWeights(defaultWeight map[clusterapiv1beta1.ScoreCoordinate]int32, cus
 }
 
 // Generate prioritizers for the placement.
-func getPrioritizers(weights map[clusterapiv1beta1.ScoreCoordinate]int32, handle plugins.Handle) (map[clusterapiv1beta1.ScoreCoordinate]plugins.Prioritizer, error) {
+func getPrioritizers(
+	weights map[clusterapiv1beta1.ScoreCoordinate]int32,
+	handle plugins.Handle,
+) (map[clusterapiv1beta1.ScoreCoordinate]plugins.Prioritizer, error) {
 	result := make(map[clusterapiv1beta1.ScoreCoordinate]plugins.Prioritizer)
 	for k, v := range weights {
 		if v == 0 {
@@ -350,7 +370,9 @@ func getPrioritizers(weights map[clusterapiv1beta1.ScoreCoordinate]int32, handle
 			case k.BuiltIn == PrioritizerSteady:
 				result[k] = steady.New(handle)
 			case k.BuiltIn == PrioritizerResourceAllocatableCPU || k.BuiltIn == PrioritizerResourceAllocatableMemory:
-				result[k] = resource.NewResourcePrioritizerBuilder(handle).WithPrioritizerName(k.BuiltIn).Build()
+				result[k] = resource.NewResourcePrioritizerBuilder(handle).
+					WithPrioritizerName(k.BuiltIn).
+					Build()
 			default:
 				//TODO: show the failure in placement.status conditions
 				return nil, fmt.Errorf("incorrect builtin prioritizer: %s", k.BuiltIn)

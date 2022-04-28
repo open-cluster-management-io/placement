@@ -22,11 +22,13 @@ func TestMatchWithClusterPredicates(t *testing.T) {
 	}{
 		{
 			name: "match with label",
-			placement: testinghelpers.NewPlacement("test", "test").AddPredicate(&metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					"cloud": "Amazon",
-				},
-			}, nil).Build(),
+			placement: testinghelpers.NewPlacement("test", "test").
+				AddPredicate(&metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"cloud": "Amazon",
+					},
+				}, nil).
+				Build(),
 			clusters: []*clusterapiv1.ManagedCluster{
 				testinghelpers.NewManagedCluster("cluster1").WithLabel("cloud", "Amazon").Build(),
 				testinghelpers.NewManagedCluster("cluster2").WithLabel("cloud", "Google").Build(),
@@ -82,25 +84,32 @@ func TestMatchWithClusterPredicates(t *testing.T) {
 		},
 		{
 			name: "match with multiple predicates",
-			placement: testinghelpers.NewPlacement("test", "test").AddPredicate(&metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					"cloud": "Amazon",
-				},
-			}, nil).AddPredicate(
-				nil, &clusterapiv1beta1.ClusterClaimSelector{
-					MatchExpressions: []metav1.LabelSelectorRequirement{
-						{
-							Key:      "region",
-							Operator: metav1.LabelSelectorOpIn,
-							Values:   []string{"us-east-1"},
+			placement: testinghelpers.NewPlacement("test", "test").
+				AddPredicate(&metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"cloud": "Amazon",
+					},
+				}, nil).
+				AddPredicate(
+					nil, &clusterapiv1beta1.ClusterClaimSelector{
+						MatchExpressions: []metav1.LabelSelectorRequirement{
+							{
+								Key:      "region",
+								Operator: metav1.LabelSelectorOpIn,
+								Values:   []string{"us-east-1"},
+							},
 						},
 					},
-				},
-			).Build(),
+				).
+				Build(),
 			clusters: []*clusterapiv1.ManagedCluster{
 				testinghelpers.NewManagedCluster("cluster1").WithLabel("cloud", "Amazon").Build(),
-				testinghelpers.NewManagedCluster("cluster2").WithClaim("region", "us-east-1").Build(),
-				testinghelpers.NewManagedCluster("cluster3").WithClaim("region", "us-east-2").Build(),
+				testinghelpers.NewManagedCluster("cluster2").
+					WithClaim("region", "us-east-1").
+					Build(),
+				testinghelpers.NewManagedCluster("cluster3").
+					WithClaim("region", "us-east-2").
+					Build(),
 			},
 			expectedClusterNames: []string{"cluster1", "cluster2"},
 		},
@@ -118,13 +127,20 @@ func TestMatchWithClusterPredicates(t *testing.T) {
 
 			expectedClusterNames := sets.NewString(c.expectedClusterNames...)
 			if len(clusters) != expectedClusterNames.Len() {
-				t.Errorf("expected %d clusters but got %d", expectedClusterNames.Len(), len(clusters))
+				t.Errorf(
+					"expected %d clusters but got %d",
+					expectedClusterNames.Len(),
+					len(clusters),
+				)
 			}
 			for _, cluster := range clusters {
 				expectedClusterNames.Delete(cluster.Name)
 			}
 			if expectedClusterNames.Len() > 0 {
-				t.Errorf("expected clusters not selected: %s", strings.Join(expectedClusterNames.List(), ","))
+				t.Errorf(
+					"expected clusters not selected: %s",
+					strings.Join(expectedClusterNames.List(), ","),
+				)
 			}
 		})
 	}

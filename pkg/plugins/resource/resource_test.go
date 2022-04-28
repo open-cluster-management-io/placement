@@ -27,9 +27,15 @@ func TestScoreClusterWithResource(t *testing.T) {
 			algorithm: "Allocatable",
 			placement: testinghelpers.NewPlacement("test", "test").Build(),
 			clusters: []*clusterapiv1.ManagedCluster{
-				testinghelpers.NewManagedCluster("cluster1").WithResource(clusterapiv1.ResourceMemory, "20", "100").Build(),
-				testinghelpers.NewManagedCluster("cluster2").WithResource(clusterapiv1.ResourceMemory, "60", "100").Build(),
-				testinghelpers.NewManagedCluster("cluster3").WithResource(clusterapiv1.ResourceMemory, "100", "100").Build(),
+				testinghelpers.NewManagedCluster("cluster1").
+					WithResource(clusterapiv1.ResourceMemory, "20", "100").
+					Build(),
+				testinghelpers.NewManagedCluster("cluster2").
+					WithResource(clusterapiv1.ResourceMemory, "60", "100").
+					Build(),
+				testinghelpers.NewManagedCluster("cluster3").
+					WithResource(clusterapiv1.ResourceMemory, "100", "100").
+					Build(),
 			},
 			expectedScores: map[string]int64{"cluster1": -100, "cluster2": 0, "cluster3": 100},
 		},
@@ -39,9 +45,15 @@ func TestScoreClusterWithResource(t *testing.T) {
 			algorithm: "Allocatable",
 			placement: testinghelpers.NewPlacement("test", "test").Build(),
 			clusters: []*clusterapiv1.ManagedCluster{
-				testinghelpers.NewManagedCluster("cluster1").WithResource(clusterapiv1.ResourceMemory, "50", "100").Build(),
-				testinghelpers.NewManagedCluster("cluster2").WithResource(clusterapiv1.ResourceMemory, "50", "100").Build(),
-				testinghelpers.NewManagedCluster("cluster3").WithResource(clusterapiv1.ResourceMemory, "50", "100").Build(),
+				testinghelpers.NewManagedCluster("cluster1").
+					WithResource(clusterapiv1.ResourceMemory, "50", "100").
+					Build(),
+				testinghelpers.NewManagedCluster("cluster2").
+					WithResource(clusterapiv1.ResourceMemory, "50", "100").
+					Build(),
+				testinghelpers.NewManagedCluster("cluster3").
+					WithResource(clusterapiv1.ResourceMemory, "50", "100").
+					Build(),
 			},
 			expectedScores: map[string]int64{"cluster1": 100, "cluster2": 100, "cluster3": 100},
 		},
@@ -51,9 +63,15 @@ func TestScoreClusterWithResource(t *testing.T) {
 			algorithm: "Allocatable",
 			placement: testinghelpers.NewPlacement("test", "test").Build(),
 			clusters: []*clusterapiv1.ManagedCluster{
-				testinghelpers.NewManagedCluster("cluster1").WithResource(clusterapiv1.ResourceMemory, "0", "100").Build(),
-				testinghelpers.NewManagedCluster("cluster2").WithResource(clusterapiv1.ResourceMemory, "0", "100").Build(),
-				testinghelpers.NewManagedCluster("cluster3").WithResource(clusterapiv1.ResourceMemory, "0", "100").Build(),
+				testinghelpers.NewManagedCluster("cluster1").
+					WithResource(clusterapiv1.ResourceMemory, "0", "100").
+					Build(),
+				testinghelpers.NewManagedCluster("cluster2").
+					WithResource(clusterapiv1.ResourceMemory, "0", "100").
+					Build(),
+				testinghelpers.NewManagedCluster("cluster3").
+					WithResource(clusterapiv1.ResourceMemory, "0", "100").
+					Build(),
 			},
 			expectedScores: map[string]int64{"cluster1": 100, "cluster2": 100, "cluster3": 100},
 		},
@@ -75,9 +93,15 @@ func TestScoreClusterWithResource(t *testing.T) {
 			algorithm: "Allocatable",
 			placement: testinghelpers.NewPlacement("test", "test").Build(),
 			clusters: []*clusterapiv1.ManagedCluster{
-				testinghelpers.NewManagedCluster("cluster1").WithResource(clusterapiv1.ResourceCPU, "10", "10").Build(),
-				testinghelpers.NewManagedCluster("cluster2").WithResource(clusterapiv1.ResourceCPU, "6", "10").Build(),
-				testinghelpers.NewManagedCluster("cluster3").WithResource(clusterapiv1.ResourceCPU, "2", "10").Build(),
+				testinghelpers.NewManagedCluster("cluster1").
+					WithResource(clusterapiv1.ResourceCPU, "10", "10").
+					Build(),
+				testinghelpers.NewManagedCluster("cluster2").
+					WithResource(clusterapiv1.ResourceCPU, "6", "10").
+					Build(),
+				testinghelpers.NewManagedCluster("cluster3").
+					WithResource(clusterapiv1.ResourceCPU, "2", "10").
+					Build(),
 			},
 			expectedScores: map[string]int64{"cluster1": 100, "cluster2": 0, "cluster3": -100},
 		},
@@ -87,9 +111,15 @@ func TestScoreClusterWithResource(t *testing.T) {
 			algorithm: "Allocatable",
 			placement: testinghelpers.NewPlacement("test", "test").Build(),
 			clusters: []*clusterapiv1.ManagedCluster{
-				testinghelpers.NewManagedCluster("cluster1").WithResource(clusterapiv1.ResourceCPU, "5", "10").Build(),
-				testinghelpers.NewManagedCluster("cluster2").WithResource(clusterapiv1.ResourceCPU, "5", "10").Build(),
-				testinghelpers.NewManagedCluster("cluster3").WithResource(clusterapiv1.ResourceCPU, "5", "10").Build(),
+				testinghelpers.NewManagedCluster("cluster1").
+					WithResource(clusterapiv1.ResourceCPU, "5", "10").
+					Build(),
+				testinghelpers.NewManagedCluster("cluster2").
+					WithResource(clusterapiv1.ResourceCPU, "5", "10").
+					Build(),
+				testinghelpers.NewManagedCluster("cluster3").
+					WithResource(clusterapiv1.ResourceCPU, "5", "10").
+					Build(),
 			},
 			expectedScores: map[string]int64{"cluster1": 100, "cluster2": 100, "cluster3": 100},
 		},
@@ -99,9 +129,15 @@ func TestScoreClusterWithResource(t *testing.T) {
 			algorithm: "Allocatable",
 			placement: testinghelpers.NewPlacement("test", "test").Build(),
 			clusters: []*clusterapiv1.ManagedCluster{
-				testinghelpers.NewManagedCluster("cluster1").WithResource(clusterapiv1.ResourceCPU, "0", "10").Build(),
-				testinghelpers.NewManagedCluster("cluster2").WithResource(clusterapiv1.ResourceCPU, "0", "10").Build(),
-				testinghelpers.NewManagedCluster("cluster3").WithResource(clusterapiv1.ResourceCPU, "0", "10").Build(),
+				testinghelpers.NewManagedCluster("cluster1").
+					WithResource(clusterapiv1.ResourceCPU, "0", "10").
+					Build(),
+				testinghelpers.NewManagedCluster("cluster2").
+					WithResource(clusterapiv1.ResourceCPU, "0", "10").
+					Build(),
+				testinghelpers.NewManagedCluster("cluster3").
+					WithResource(clusterapiv1.ResourceCPU, "0", "10").
+					Build(),
 			},
 			expectedScores: map[string]int64{"cluster1": 100, "cluster2": 100, "cluster3": 100},
 		},

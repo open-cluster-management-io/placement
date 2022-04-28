@@ -36,7 +36,10 @@ func (p *Predicate) Description() string {
 }
 
 func (p *Predicate) Filter(
-	ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) plugins.PluginFilterResult {
+	ctx context.Context,
+	placement *clusterapiv1beta1.Placement,
+	clusters []*clusterapiv1.ManagedCluster,
+) plugins.PluginFilterResult {
 
 	if len(placement.Spec.Predicates) == 0 {
 		return plugins.PluginFilterResult{
@@ -95,7 +98,10 @@ func (p *Predicate) Filter(
 	}
 }
 
-func (p *Predicate) RequeueAfter(ctx context.Context, placement *clusterapiv1beta1.Placement) plugins.PluginRequeueResult {
+func (p *Predicate) RequeueAfter(
+	ctx context.Context,
+	placement *clusterapiv1beta1.Placement,
+) plugins.PluginRequeueResult {
 	return plugins.PluginRequeueResult{}
 }
 
@@ -119,7 +125,9 @@ func convertLabelSelector(labelSelector metav1.LabelSelector) (labels.Selector, 
 }
 
 // convertClaimSelector converts ClusterClaimSelector to labels.Selector
-func convertClaimSelector(clusterClaimSelector clusterapiv1beta1.ClusterClaimSelector) (labels.Selector, error) {
+func convertClaimSelector(
+	clusterClaimSelector clusterapiv1beta1.ClusterClaimSelector,
+) (labels.Selector, error) {
 	selector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
 		MatchExpressions: clusterClaimSelector.MatchExpressions,
 	})

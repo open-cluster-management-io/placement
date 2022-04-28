@@ -17,7 +17,10 @@ import (
 )
 
 // RunControllerManager starts the controllers on hub to make placement decisions.
-func RunControllerManager(ctx context.Context, controllerContext *controllercmd.ControllerContext) error {
+func RunControllerManager(
+	ctx context.Context,
+	controllerContext *controllercmd.ControllerContext,
+) error {
 	clusterClient, err := clusterclient.NewForConfig(controllerContext.KubeConfig)
 	if err != nil {
 		return err
