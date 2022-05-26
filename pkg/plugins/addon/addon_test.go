@@ -10,6 +10,7 @@ import (
 	testingclock "k8s.io/utils/clock/testing"
 	clusterapiv1 "open-cluster-management.io/api/cluster/v1"
 	clusterapivbeta1 "open-cluster-management.io/api/cluster/v1beta1"
+	"open-cluster-management.io/placement/pkg/controllers/framework"
 	testinghelpers "open-cluster-management.io/placement/pkg/helpers/testing"
 )
 
@@ -25,8 +26,10 @@ func TestScoreClusterWithAddOn(t *testing.T) {
 		expectedScores      map[string]int64
 	}{
 		{
-			name:      "no addon scores",
-			placement: testinghelpers.NewPlacement("test", "test").WithScoreCoordinateAddOn("test", "score1", 1).Build(),
+			name: "no addon scores",
+			placement: testinghelpers.NewPlacement("test", "test").
+				WithScoreCoordinateAddOn("test", "score1", 1).
+				Build(),
 			clusters: []*clusterapiv1.ManagedCluster{
 				testinghelpers.NewManagedCluster("cluster1").Build(),
 				testinghelpers.NewManagedCluster("cluster2").Build(),
@@ -36,45 +39,66 @@ func TestScoreClusterWithAddOn(t *testing.T) {
 			expectedScores:      map[string]int64{"cluster1": 0, "cluster2": 0, "cluster3": 0},
 		},
 		{
-			name:      "part of addon scores generated",
-			placement: testinghelpers.NewPlacement("test", "test").WithScoreCoordinateAddOn("test", "score1", 1).Build(),
+			name: "part of addon scores generated",
+			placement: testinghelpers.NewPlacement("test", "test").
+				WithScoreCoordinateAddOn("test", "score1", 1).
+				Build(),
 			clusters: []*clusterapiv1.ManagedCluster{
 				testinghelpers.NewManagedCluster("cluster1").Build(),
 				testinghelpers.NewManagedCluster("cluster2").Build(),
 				testinghelpers.NewManagedCluster("cluster3").Build(),
 			},
 			existingAddOnScores: []runtime.Object{
-				testinghelpers.NewAddOnPlacementScore("cluster1", "test").WithScore("score1", 30).Build(),
+				testinghelpers.NewAddOnPlacementScore("cluster1", "test").
+					WithScore("score1", 30).
+					Build(),
 			},
 			expectedScores: map[string]int64{"cluster1": 30, "cluster2": 0, "cluster3": 0},
 		},
 		{
-			name:      "part of addon scores expired",
-			placement: testinghelpers.NewPlacement("test", "test").WithScoreCoordinateAddOn("test", "score1", 1).Build(),
+			name: "part of addon scores expired",
+			placement: testinghelpers.NewPlacement("test", "test").
+				WithScoreCoordinateAddOn("test", "score1", 1).
+				Build(),
 			clusters: []*clusterapiv1.ManagedCluster{
 				testinghelpers.NewManagedCluster("cluster1").Build(),
 				testinghelpers.NewManagedCluster("cluster2").Build(),
 				testinghelpers.NewManagedCluster("cluster3").Build(),
 			},
 			existingAddOnScores: []runtime.Object{
-				testinghelpers.NewAddOnPlacementScore("cluster1", "test").WithScore("score1", 30).WithValidUntil(expiredTime).Build(),
-				testinghelpers.NewAddOnPlacementScore("cluster2", "test").WithScore("score1", 40).Build(),
-				testinghelpers.NewAddOnPlacementScore("cluster3", "test").WithScore("score1", 50).Build(),
+				testinghelpers.NewAddOnPlacementScore("cluster1", "test").
+					WithScore("score1", 30).
+					WithValidUntil(expiredTime).
+					Build(),
+				testinghelpers.NewAddOnPlacementScore("cluster2", "test").
+					WithScore("score1", 40).
+					Build(),
+				testinghelpers.NewAddOnPlacementScore("cluster3", "test").
+					WithScore("score1", 50).
+					Build(),
 			},
 			expectedScores: map[string]int64{"cluster1": 0, "cluster2": 40, "cluster3": 50},
 		},
 		{
-			name:      "all the addon scores generated",
-			placement: testinghelpers.NewPlacement("test", "test").WithScoreCoordinateAddOn("test", "score1", 1).Build(),
+			name: "all the addon scores generated",
+			placement: testinghelpers.NewPlacement("test", "test").
+				WithScoreCoordinateAddOn("test", "score1", 1).
+				Build(),
 			clusters: []*clusterapiv1.ManagedCluster{
 				testinghelpers.NewManagedCluster("cluster1").Build(),
 				testinghelpers.NewManagedCluster("cluster2").Build(),
 				testinghelpers.NewManagedCluster("cluster3").Build(),
 			},
 			existingAddOnScores: []runtime.Object{
-				testinghelpers.NewAddOnPlacementScore("cluster1", "test").WithScore("score1", 30).Build(),
-				testinghelpers.NewAddOnPlacementScore("cluster2", "test").WithScore("score1", 40).Build(),
-				testinghelpers.NewAddOnPlacementScore("cluster3", "test").WithScore("score1", 50).Build(),
+				testinghelpers.NewAddOnPlacementScore("cluster1", "test").
+					WithScore("score1", 30).
+					Build(),
+				testinghelpers.NewAddOnPlacementScore("cluster2", "test").
+					WithScore("score1", 40).
+					Build(),
+				testinghelpers.NewAddOnPlacementScore("cluster3", "test").
+					WithScore("score1", 50).
+					Build(),
 			},
 			expectedScores: map[string]int64{"cluster1": 30, "cluster2": 40, "cluster3": 50},
 		},
@@ -84,16 +108,20 @@ func TestScoreClusterWithAddOn(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			addon := &AddOn{
-				handle:          testinghelpers.NewFakePluginHandle(t, nil, c.existingAddOnScores...),
+				handle: testinghelpers.NewFakePluginHandle(
+					t,
+					nil,
+					c.existingAddOnScores...),
 				prioritizerName: "AddOn/test/score1",
 				resourceName:    "test",
 				scoreName:       "score1",
 			}
 
-			scoreResult := addon.Score(context.TODO(), c.placement, c.clusters)
+			scoreResult, status := addon.Score(context.TODO(), c.placement, c.clusters)
 			scores := scoreResult.Scores
-			err := scoreResult.Err
-			if err != nil {
+			err := status.AsError()
+
+			if status.Code() == framework.Error && err != nil {
 				t.Errorf("Expect no error, but got %v", err)
 			}
 

@@ -39,7 +39,10 @@ func TestScoreClusterWithSteady(t *testing.T) {
 				testinghelpers.NewManagedCluster("cluster3").Build(),
 			},
 			existingDecisions: []runtime.Object{
-				testinghelpers.NewPlacementDecision("test", "test1").WithLabel(placementLabel, "test").WithDecisions("cluster1").Build(),
+				testinghelpers.NewPlacementDecision("test", "test1").
+					WithLabel(placementLabel, "test").
+					WithDecisions("cluster1").
+					Build(),
 			},
 			expectedScores: map[string]int64{"cluster1": 100, "cluster2": 100, "cluster3": 100},
 		},
@@ -52,7 +55,10 @@ func TestScoreClusterWithSteady(t *testing.T) {
 				testinghelpers.NewManagedCluster("cluster3").Build(),
 			},
 			existingDecisions: []runtime.Object{
-				testinghelpers.NewPlacementDecision("test", "test1").WithLabel(placementLabel, "test1").WithDecisions("cluster1").Build(),
+				testinghelpers.NewPlacementDecision("test", "test1").
+					WithLabel(placementLabel, "test1").
+					WithDecisions("cluster1").
+					Build(),
 			},
 			expectedScores: map[string]int64{"cluster1": -100, "cluster2": 100, "cluster3": 100},
 		},
@@ -65,8 +71,14 @@ func TestScoreClusterWithSteady(t *testing.T) {
 				testinghelpers.NewManagedCluster("cluster3").Build(),
 			},
 			existingDecisions: []runtime.Object{
-				testinghelpers.NewPlacementDecision("test", "test1").WithLabel(placementLabel, "test1").WithDecisions("cluster1", "cluster2").Build(),
-				testinghelpers.NewPlacementDecision("test", "test2").WithLabel(placementLabel, "test2").WithDecisions("cluster1", "cluster3").Build(),
+				testinghelpers.NewPlacementDecision("test", "test1").
+					WithLabel(placementLabel, "test1").
+					WithDecisions("cluster1", "cluster2").
+					Build(),
+				testinghelpers.NewPlacementDecision("test", "test2").
+					WithLabel(placementLabel, "test2").
+					WithDecisions("cluster1", "cluster3").
+					Build(),
 			},
 			expectedScores: map[string]int64{"cluster1": -100, "cluster2": 0, "cluster3": 0},
 		},
@@ -78,9 +90,9 @@ func TestScoreClusterWithSteady(t *testing.T) {
 				handle: testinghelpers.NewFakePluginHandle(t, nil, c.existingDecisions...),
 			}
 
-			scoreResult := steady.Score(context.TODO(), c.placement, c.clusters)
+			scoreResult, status := steady.Score(context.TODO(), c.placement, c.clusters)
 			scores := scoreResult.Scores
-			err := scoreResult.Err
+			err := status.AsError()
 
 			if err != nil {
 				t.Errorf("Expect no error, but got %v", err)

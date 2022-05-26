@@ -53,12 +53,17 @@ func TestOnClusterSetBindingChange(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			clusterClient := clusterfake.NewSimpleClientset(c.initObjs...)
-			clusterInformerFactory := testinghelpers.NewClusterInformerFactory(clusterClient, c.initObjs...)
+			clusterInformerFactory := testinghelpers.NewClusterInformerFactory(
+				clusterClient,
+				c.initObjs...)
 
 			queuedKeys := sets.NewString()
 			handler := &clusterSetBindingEventHandler{
-				clusterSetLister: clusterInformerFactory.Cluster().V1beta1().ManagedClusterSets().Lister(),
-				placementLister:  clusterInformerFactory.Cluster().V1beta1().Placements().Lister(),
+				clusterSetLister: clusterInformerFactory.Cluster().
+					V1beta1().
+					ManagedClusterSets().
+					Lister(),
+				placementLister: clusterInformerFactory.Cluster().V1beta1().Placements().Lister(),
 				enqueuePlacementFunc: func(namespace, name string) {
 					queuedKeys.Insert(fmt.Sprintf("%s/%s", namespace, name))
 				},
@@ -67,7 +72,11 @@ func TestOnClusterSetBindingChange(t *testing.T) {
 			handler.onChange(c.obj)
 			expectedQueuedKeys := sets.NewString(c.queuedKeys...)
 			if !queuedKeys.Equal(expectedQueuedKeys) {
-				t.Errorf("expected queued placements %q, but got %s", strings.Join(expectedQueuedKeys.List(), ","), strings.Join(queuedKeys.List(), ","))
+				t.Errorf(
+					"expected queued placements %q, but got %s",
+					strings.Join(expectedQueuedKeys.List(), ","),
+					strings.Join(queuedKeys.List(), ","),
+				)
 			}
 		})
 	}
@@ -87,8 +96,12 @@ func TestEnqueuePlacementsByClusterSetBinding(t *testing.T) {
 			clusterSetBindingName: "clusterset1",
 			initObjs: []runtime.Object{
 				testinghelpers.NewPlacement("ns1", "placement1").Build(),
-				testinghelpers.NewPlacement("ns1", "placement2").WithClusterSets("clusterset2").Build(),
-				testinghelpers.NewPlacement("ns2", "placement3").WithClusterSets("clusterset1").Build(),
+				testinghelpers.NewPlacement("ns1", "placement2").
+					WithClusterSets("clusterset2").
+					Build(),
+				testinghelpers.NewPlacement("ns2", "placement3").
+					WithClusterSets("clusterset1").
+					Build(),
 			},
 			queuedKeys: []string{
 				"ns1/placement1",
@@ -99,7 +112,9 @@ func TestEnqueuePlacementsByClusterSetBinding(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			clusterClient := clusterfake.NewSimpleClientset(c.initObjs...)
-			clusterInformerFactory := testinghelpers.NewClusterInformerFactory(clusterClient, c.initObjs...)
+			clusterInformerFactory := testinghelpers.NewClusterInformerFactory(
+				clusterClient,
+				c.initObjs...)
 
 			queuedKeys := sets.NewString()
 			err := enqueuePlacementsByClusterSetBinding(
@@ -116,7 +131,11 @@ func TestEnqueuePlacementsByClusterSetBinding(t *testing.T) {
 
 			expectedQueuedKeys := sets.NewString(c.queuedKeys...)
 			if !queuedKeys.Equal(expectedQueuedKeys) {
-				t.Errorf("expected queued placements %q, but got %s", strings.Join(expectedQueuedKeys.List(), ","), strings.Join(queuedKeys.List(), ","))
+				t.Errorf(
+					"expected queued placements %q, but got %s",
+					strings.Join(expectedQueuedKeys.List(), ","),
+					strings.Join(queuedKeys.List(), ","),
+				)
 			}
 		})
 	}
@@ -172,12 +191,17 @@ func TestOnClusterSetBindingDelete(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			clusterClient := clusterfake.NewSimpleClientset(c.initObjs...)
-			clusterInformerFactory := testinghelpers.NewClusterInformerFactory(clusterClient, c.initObjs...)
+			clusterInformerFactory := testinghelpers.NewClusterInformerFactory(
+				clusterClient,
+				c.initObjs...)
 
 			queuedKeys := sets.NewString()
 			handler := &clusterSetBindingEventHandler{
-				clusterSetLister: clusterInformerFactory.Cluster().V1beta1().ManagedClusterSets().Lister(),
-				placementLister:  clusterInformerFactory.Cluster().V1beta1().Placements().Lister(),
+				clusterSetLister: clusterInformerFactory.Cluster().
+					V1beta1().
+					ManagedClusterSets().
+					Lister(),
+				placementLister: clusterInformerFactory.Cluster().V1beta1().Placements().Lister(),
 				enqueuePlacementFunc: func(namespace, name string) {
 					queuedKeys.Insert(fmt.Sprintf("%s/%s", namespace, name))
 				},
@@ -186,7 +210,11 @@ func TestOnClusterSetBindingDelete(t *testing.T) {
 			handler.OnDelete(c.obj)
 			expectedQueuedKeys := sets.NewString(c.queuedKeys...)
 			if !queuedKeys.Equal(expectedQueuedKeys) {
-				t.Errorf("expected queued placements %q, but got %s", strings.Join(expectedQueuedKeys.List(), ","), strings.Join(queuedKeys.List(), ","))
+				t.Errorf(
+					"expected queued placements %q, but got %s",
+					strings.Join(expectedQueuedKeys.List(), ","),
+					strings.Join(queuedKeys.List(), ","),
+				)
 			}
 		})
 	}

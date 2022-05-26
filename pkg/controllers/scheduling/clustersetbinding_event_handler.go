@@ -60,9 +60,19 @@ func (h *clusterSetBindingEventHandler) onChange(obj interface{}) {
 		return
 	}
 
-	err = enqueuePlacementsByClusterSetBinding(namespace, clusterSetBindingName, h.placementLister, h.enqueuePlacementFunc)
+	err = enqueuePlacementsByClusterSetBinding(
+		namespace,
+		clusterSetBindingName,
+		h.placementLister,
+		h.enqueuePlacementFunc,
+	)
 	if err != nil {
-		klog.Errorf("Unable to enqueue placements by clustersetbinding %s/%s: %v", namespace, clusterSetBindingName, err)
+		klog.Errorf(
+			"Unable to enqueue placements by clustersetbinding %s/%s: %v",
+			namespace,
+			clusterSetBindingName,
+			err,
+		)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 
 	clusterapiv1 "open-cluster-management.io/api/cluster/v1"
 	clusterapiv1beta1 "open-cluster-management.io/api/cluster/v1beta1"
+	"open-cluster-management.io/placement/pkg/controllers/framework"
 	"open-cluster-management.io/placement/pkg/plugins"
 )
 
@@ -61,7 +62,9 @@ func (r *ResourcePrioritizerBuilder) Build() *ResourcePrioritizer {
 
 // parese prioritizerName to algorithm and resource.
 // For example, prioritizerName ResourceAllocatableCPU will return Allocatable, CPU.
-func parsePrioritizerName(prioritizerName string) (algorithm string, resource clusterapiv1.ResourceName) {
+func parsePrioritizerName(
+	prioritizerName string,
+) (algorithm string, resource clusterapiv1.ResourceName) {
 	s := regexp.MustCompile("[A-Z]+[a-z]*").FindAllString(prioritizerName, -1)
 	if len(s) == 3 {
 		return s[1], resourceMap[s[2]]
@@ -77,25 +80,39 @@ func (r *ResourcePrioritizer) Description() string {
 	return description
 }
 
-func (r *ResourcePrioritizer) Score(ctx context.Context, placement *clusterapiv1beta1.Placement, clusters []*clusterapiv1.ManagedCluster) plugins.PluginScoreResult {
+func (r *ResourcePrioritizer) Score(
+	ctx context.Context,
+	placement *clusterapiv1beta1.Placement,
+	clusters []*clusterapiv1.ManagedCluster,
+) (plugins.PluginScoreResult, *framework.Status) {
+	status := framework.NewStatus(r.Name(), framework.Success, "")
 	if r.algorithm == "Allocatable" {
-		return mostResourceAllocatableScores(r.resource, clusters)
+		return mostResourceAllocatableScores(r.resource, clusters), status
 	}
-	return plugins.PluginScoreResult{}
+	return plugins.PluginScoreResult{}, status
 }
 
-func (r *ResourcePrioritizer) RequeueAfter(ctx context.Context, placement *clusterapiv1beta1.Placement) plugins.PluginRequeueResult {
-	return plugins.PluginRequeueResult{}
+func (r *ResourcePrioritizer) RequeueAfter(
+	ctx context.Context,
+	placement *clusterapiv1beta1.Placement,
+) (plugins.PluginRequeueResult, *framework.Status) {
+	return plugins.PluginRequeueResult{}, framework.NewStatus(r.Name(), framework.Skip, "")
 }
 
 // Calculate clusters scores based on the resource allocatable.
 // The clusters that has the most allocatable are given the highest score, while the least is given the lowest score.
 // The score range is from -100 to 100.
-func mostResourceAllocatableScores(resourceName clusterapiv1.ResourceName, clusters []*clusterapiv1.ManagedCluster) plugins.PluginScoreResult {
+func mostResourceAllocatableScores(
+	resourceName clusterapiv1.ResourceName,
+	clusters []*clusterapiv1.ManagedCluster,
+) plugins.PluginScoreResult {
 	scores := map[string]int64{}
 
 	// get resourceName's min and max allocatable among all the clusters
-	minAllocatable, maxAllocatable, err := getClustersMinMaxAllocatableResource(clusters, resourceName)
+	minAllocatable, maxAllocatable, err := getClustersMinMaxAllocatableResource(
+		clusters,
+		resourceName,
+	)
 	if err != nil {
 		return plugins.PluginScoreResult{
 			Scores: scores,
@@ -124,7 +141,10 @@ func mostResourceAllocatableScores(resourceName clusterapiv1.ResourceName, clust
 }
 
 // Go through one cluster resources and return the allocatable and capacity of the resourceName.
-func getClusterResource(cluster *clusterapiv1.ManagedCluster, resourceName clusterapiv1.ResourceName) (allocatable, capacity float64, err error) {
+func getClusterResource(
+	cluster *clusterapiv1.ManagedCluster,
+	resourceName clusterapiv1.ResourceName,
+) (allocatable, capacity float64, err error) {
 	if v, exist := cluster.Status.Allocatable[resourceName]; exist {
 		allocatable = v.AsApproximateFloat64()
 	} else {
@@ -141,7 +161,10 @@ func getClusterResource(cluster *clusterapiv1.ManagedCluster, resourceName clust
 }
 
 // Go through all the cluster resources and return the min and max allocatable value of the resourceName.
-func getClustersMinMaxAllocatableResource(clusters []*clusterapiv1.ManagedCluster, resourceName clusterapiv1.ResourceName) (minAllocatable, maxAllocatable float64, err error) {
+func getClustersMinMaxAllocatableResource(
+	clusters []*clusterapiv1.ManagedCluster,
+	resourceName clusterapiv1.ResourceName,
+) (minAllocatable, maxAllocatable float64, err error) {
 	allocatable := sort.Float64Slice{}
 
 	// get allocatable resources
