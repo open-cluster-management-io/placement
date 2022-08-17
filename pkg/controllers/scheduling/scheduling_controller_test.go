@@ -389,6 +389,17 @@ func TestGetAvailableClusters(t *testing.T) {
 			expectedClusterNames: []string{"cluster1"},
 		},
 		{
+			name:            "clusterset has exclusive set label ClusterSelector",
+			clusterSetNames: []string{"clusterset1"},
+			initObjs: []runtime.Object{
+				testinghelpers.NewClusterSet("clusterset1").WithClusterSelector(clusterapiv1beta1.ManagedClusterSelector{
+					SelectorType: clusterapiv1beta1.ExclusiveClusterSetLabel,
+				}).Build(),
+				testinghelpers.NewManagedCluster("cluster1").WithLabel(clusterSetLabel, "clusterset1").Build(),
+			},
+			expectedClusterNames: []string{"cluster1"},
+		},
+		{
 			name:            "clusterset has labelSelector type ClusterSelector",
 			clusterSetNames: []string{"clusterset1"},
 			initObjs: []runtime.Object{
