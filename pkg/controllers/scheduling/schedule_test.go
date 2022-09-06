@@ -506,11 +506,12 @@ func TestSchedule(t *testing.T) {
 			c.initObjs = append(c.initObjs, c.placement)
 			clusterClient := clusterfake.NewSimpleClientset(c.initObjs...)
 			s := NewPluginScheduler(testinghelpers.NewFakePluginHandle(t, clusterClient, c.initObjs...))
-			result, err := s.Schedule(
+			result, status := s.Schedule(
 				context.TODO(),
 				c.placement,
 				c.clusters,
 			)
+			err := status.AsError()
 			if err != nil {
 				t.Errorf("unexpected err: %v", err)
 			}

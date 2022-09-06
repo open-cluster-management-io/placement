@@ -16,6 +16,7 @@ import (
 	clusterfake "open-cluster-management.io/api/client/cluster/clientset/versioned/fake"
 	clusterapiv1 "open-cluster-management.io/api/cluster/v1"
 	clusterapiv1beta1 "open-cluster-management.io/api/cluster/v1beta1"
+	"open-cluster-management.io/placement/pkg/controllers/framework"
 	testinghelpers "open-cluster-management.io/placement/pkg/helpers/testing"
 )
 
@@ -26,7 +27,7 @@ type testScheduler struct {
 func (s *testScheduler) Schedule(ctx context.Context,
 	placement *clusterapiv1beta1.Placement,
 	clusters []*clusterapiv1.ManagedCluster,
-) (ScheduleResult, error) {
+) (ScheduleResult, *framework.Status) {
 	return s.result, nil
 }
 
@@ -152,7 +153,7 @@ func TestSchedulingController_sync(t *testing.T) {
 		{
 			name: "placement status not changed",
 			placement: testinghelpers.NewPlacement(placementNamespace, placementName).
-				WithNumOfSelectedClusters(3).WithSatisfiedCondition(3, 0).Build(),
+				WithNumOfSelectedClusters(3).WithSatisfiedCondition(3, 0).WithMisconfiguredCondition(metav1.ConditionFalse).Build(),
 			initObjs: []runtime.Object{
 				testinghelpers.NewClusterSet("clusterset1").Build(),
 				testinghelpers.NewClusterSetBinding(placementNamespace, "clusterset1"),
@@ -545,6 +546,7 @@ func TestNewSatisfiedCondition(t *testing.T) {
 				c.numOfAvailableClusters,
 				c.numOfFeasibleClusters,
 				c.numOfUnscheduledDecisions,
+				nil,
 			)
 
 			if condition.Status != c.expectedStatus {
@@ -706,6 +708,7 @@ func TestBind(t *testing.T) {
 				context.TODO(),
 				testinghelpers.NewPlacement(placementNamespace, placementName).Build(),
 				c.clusterDecisions,
+				nil,
 				nil,
 			)
 			if err != nil {
