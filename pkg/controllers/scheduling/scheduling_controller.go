@@ -36,6 +36,7 @@ import (
 const (
 	clusterSetLabel                = "cluster.open-cluster-management.io/clusterset"
 	placementLabel                 = "cluster.open-cluster-management.io/placement"
+	placementDisableAnnotation     = "cluster.open-cluster-management.io/placement-scheduling-disable"
 	schedulingControllerName       = "SchedulingController"
 	schedulingControllerResyncName = "SchedulingControllerResync"
 	maxNumOfClusterDecisions       = 100
@@ -260,6 +261,11 @@ func (c *schedulingController) getPlacement(queueKey string) (*clusterapiv1beta1
 func (c *schedulingController) syncPlacement(ctx context.Context, syncCtx factory.SyncContext, placement *clusterapiv1beta1.Placement) error {
 	// no work if placement is deleting
 	if !placement.DeletionTimestamp.IsZero() {
+		return nil
+	}
+
+	// no work if placement has cluster.open-cluster-management.io/placement-scheduling-disable: "true" annotation
+	if value, ok := placement.GetAnnotations()[placementDisableAnnotation]; ok && value == "true" {
 		return nil
 	}
 
