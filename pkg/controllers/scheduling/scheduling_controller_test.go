@@ -180,7 +180,7 @@ func TestSchedulingController_sync(t *testing.T) {
 			name: "placement schedule controller is disabled",
 			placement: testinghelpers.NewPlacementWithAnnotations(placementNamespace, placementName,
 				map[string]string{
-					placementDisableAnnotation: "true",
+					clusterapiv1beta1.PlacementDisableAnnotation: "true",
 				}).Build(),
 			scheduleResult: &scheduleResult{
 				feasibleClusters: []*clusterapiv1.ManagedCluster{
