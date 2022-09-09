@@ -263,7 +263,7 @@ func (c *schedulingController) syncPlacement(ctx context.Context, syncCtx factor
 		return nil
 	}
 
-	// no work if placement has cluster.open-cluster-management.io/placement-scheduling-disable: "true" annotation
+	// no work if placement has cluster.open-cluster-management.io/experimental-scheduling-disable: "true" annotation
 	if value, ok := placement.GetAnnotations()[clusterapiv1beta1.PlacementDisableAnnotation]; ok && value == "true" {
 		return nil
 	}
