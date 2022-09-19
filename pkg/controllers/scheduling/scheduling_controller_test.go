@@ -559,6 +559,53 @@ func TestNewSatisfiedCondition(t *testing.T) {
 	}
 }
 
+func TestNewMisconfiguredCondition(t *testing.T) {
+	cases := []struct {
+		name            string
+		status          *framework.Status
+		expectedStatus  metav1.ConditionStatus
+		expectedReason  string
+		expectedMessage string
+	}{
+		{
+			name:            "Misconfigured is false when status is success",
+			status:          framework.NewStatus("plugin", framework.Success, "reasons"),
+			expectedStatus:  metav1.ConditionFalse,
+			expectedReason:  "Succeedconfigured",
+			expectedMessage: "Placement configurations check pass",
+		},
+		{
+			name:            "Misconfigured is false when status is error",
+			status:          framework.NewStatus("plugin", framework.Error, "reasons"),
+			expectedStatus:  metav1.ConditionFalse,
+			expectedReason:  "Succeedconfigured",
+			expectedMessage: "Placement configurations check pass",
+		},
+		{
+			name:            "Misconfigured is true",
+			status:          framework.NewStatus("plugin", framework.Misconfigured, "reasons"),
+			expectedStatus:  metav1.ConditionTrue,
+			expectedReason:  "Misconfigured",
+			expectedMessage: "plugin:reasons",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			condition := newMisconfiguredCondition(c.status)
+			if condition.Status != c.expectedStatus {
+				t.Errorf("expected status %q but got %q", c.expectedStatus, condition.Status)
+			}
+			if condition.Reason != c.expectedReason {
+				t.Errorf("expected reason %q but got %q", c.expectedReason, condition.Reason)
+			}
+			if condition.Message != c.expectedMessage {
+				t.Errorf("expected message %q but got %q", c.expectedReason, condition.Reason)
+			}
+		})
+	}
+}
+
 func TestBind(t *testing.T) {
 	placementNamespace := "ns1"
 	placementName := "placement1"
