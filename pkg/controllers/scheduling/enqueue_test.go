@@ -176,7 +176,8 @@ func TestEnqueuePlacementsByClusterSet(t *testing.T) {
 			syncCtx := testinghelpers.NewFakeSyncContext(t, "fake")
 			q := newEnqueuer(
 				syncCtx.Queue(),
-				clusterInformerFactory.Cluster().V1beta2().ManagedClusterSets().Lister(),
+				clusterInformerFactory.Cluster().V1().ManagedClusters(),
+				clusterInformerFactory.Cluster().V1beta2().ManagedClusterSets(),
 				clusterInformerFactory.Cluster().V1beta1().Placements(),
 				clusterInformerFactory.Cluster().V1beta2().ManagedClusterSetBindings(),
 			)
@@ -282,7 +283,8 @@ func TestEnqueuePlacementsByClusterSetBinding(t *testing.T) {
 			syncCtx := testinghelpers.NewFakeSyncContext(t, "fake")
 			q := newEnqueuer(
 				syncCtx.Queue(),
-				clusterInformerFactory.Cluster().V1beta2().ManagedClusterSets().Lister(),
+				clusterInformerFactory.Cluster().V1().ManagedClusters(),
+				clusterInformerFactory.Cluster().V1beta2().ManagedClusterSets(),
 				clusterInformerFactory.Cluster().V1beta1().Placements(),
 				clusterInformerFactory.Cluster().V1beta2().ManagedClusterSetBindings(),
 			)
@@ -317,9 +319,29 @@ func TestEnqueuePlacementsByScore(t *testing.T) {
 				testinghelpers.NewPlacement("ns1", "placement1").WithScoreCoordinateAddOn("score1", "cpu", 1).Build(),
 				testinghelpers.NewPlacement("ns2", "placement2").WithScoreCoordinateAddOn("score2", "cpu", 1).Build(),
 				testinghelpers.NewPlacement("ns3", "placement3").WithScoreCoordinateAddOn("score1", "cpu", 1).Build(),
+				testinghelpers.NewManagedCluster("cluster1").WithLabel(clusterSetLabel, "clusterset1").Build(),
+				testinghelpers.NewClusterSet("clusterset1").Build(),
+				testinghelpers.NewClusterSetBinding("ns1", "clusterset1"),
+				testinghelpers.NewClusterSetBinding("ns3", "clusterset1"),
 			},
 			queuedKeys: []string{
 				"ns1/placement1",
+				"ns3/placement3",
+			},
+		},
+		{
+			name:  "only enqueue score with filtered placement",
+			score: testinghelpers.NewAddOnPlacementScore("cluster1", "score1").Build(),
+			initObjs: []runtime.Object{
+				testinghelpers.NewPlacement("ns1", "placement1").WithScoreCoordinateAddOn("score1", "cpu", 1).Build(),
+				testinghelpers.NewPlacement("ns2", "placement2").WithScoreCoordinateAddOn("score2", "cpu", 1).Build(),
+				testinghelpers.NewPlacement("ns3", "placement3").WithScoreCoordinateAddOn("score1", "cpu", 1).Build(),
+				testinghelpers.NewManagedCluster("cluster1").WithLabel(clusterSetLabel, "clusterset1").Build(),
+				testinghelpers.NewClusterSet("clusterset1").Build(),
+				testinghelpers.NewClusterSetBinding("ns1", "clusterset2"),
+				testinghelpers.NewClusterSetBinding("ns3", "clusterset1"),
+			},
+			queuedKeys: []string{
 				"ns3/placement3",
 			},
 		},
@@ -331,6 +353,9 @@ func TestEnqueuePlacementsByScore(t *testing.T) {
 			},
 			initObjs: []runtime.Object{
 				testinghelpers.NewPlacement("ns1", "placement1").WithScoreCoordinateAddOn("score1", "cpu", 1).Build(),
+				testinghelpers.NewManagedCluster("cluster1").WithLabel(clusterSetLabel, "clusterset1").Build(),
+				testinghelpers.NewClusterSet("clusterset1").Build(),
+				testinghelpers.NewClusterSetBinding("ns1", "clusterset1"),
 			},
 			queuedKeys: []string{
 				"ns1/placement1",
@@ -346,7 +371,8 @@ func TestEnqueuePlacementsByScore(t *testing.T) {
 			syncCtx := testinghelpers.NewFakeSyncContext(t, "fake")
 			q := newEnqueuer(
 				syncCtx.Queue(),
-				clusterInformerFactory.Cluster().V1beta2().ManagedClusterSets().Lister(),
+				clusterInformerFactory.Cluster().V1().ManagedClusters(),
+				clusterInformerFactory.Cluster().V1beta2().ManagedClusterSets(),
 				clusterInformerFactory.Cluster().V1beta1().Placements(),
 				clusterInformerFactory.Cluster().V1beta2().ManagedClusterSetBindings(),
 			)

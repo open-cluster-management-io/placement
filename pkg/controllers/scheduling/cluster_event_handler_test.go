@@ -98,7 +98,8 @@ func TestOnClusterChange(t *testing.T) {
 			syncCtx := testinghelpers.NewFakeSyncContext(t, "fake")
 			q := newEnqueuer(
 				syncCtx.Queue(),
-				clusterInformerFactory.Cluster().V1beta2().ManagedClusterSets().Lister(),
+				clusterInformerFactory.Cluster().V1().ManagedClusters(),
+				clusterInformerFactory.Cluster().V1beta2().ManagedClusterSets(),
 				clusterInformerFactory.Cluster().V1beta1().Placements(),
 				clusterInformerFactory.Cluster().V1beta2().ManagedClusterSetBindings(),
 			)
@@ -256,7 +257,8 @@ func TestOnClusterUpdate(t *testing.T) {
 			syncCtx := testinghelpers.NewFakeSyncContext(t, "fake")
 			q := newEnqueuer(
 				syncCtx.Queue(),
-				clusterInformerFactory.Cluster().V1beta2().ManagedClusterSets().Lister(),
+				clusterInformerFactory.Cluster().V1().ManagedClusters(),
+				clusterInformerFactory.Cluster().V1beta2().ManagedClusterSets(),
 				clusterInformerFactory.Cluster().V1beta1().Placements(),
 				clusterInformerFactory.Cluster().V1beta2().ManagedClusterSetBindings(),
 			)
@@ -355,7 +357,8 @@ func TestOnClusterDelete(t *testing.T) {
 			syncCtx := testinghelpers.NewFakeSyncContext(t, "fake")
 			q := newEnqueuer(
 				syncCtx.Queue(),
-				clusterInformerFactory.Cluster().V1beta2().ManagedClusterSets().Lister(),
+				clusterInformerFactory.Cluster().V1().ManagedClusters(),
+				clusterInformerFactory.Cluster().V1beta2().ManagedClusterSets(),
 				clusterInformerFactory.Cluster().V1beta1().Placements(),
 				clusterInformerFactory.Cluster().V1beta2().ManagedClusterSetBindings(),
 			)

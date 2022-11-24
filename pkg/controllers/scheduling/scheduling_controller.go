@@ -79,7 +79,7 @@ func NewSchedulingController(
 ) factory.Controller {
 	syncCtx := factory.NewSyncContext(schedulingControllerName, recorder)
 
-	enQueuer := newEnqueuer(syncCtx.Queue(), clusterSetInformer.Lister(), placementInformer, clusterSetBindingInformer)
+	enQueuer := newEnqueuer(syncCtx.Queue(), clusterInformer, clusterSetInformer, placementInformer, clusterSetBindingInformer)
 
 	// build controller
 	c := &schedulingController{
