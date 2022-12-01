@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"fmt"
+
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	"github.com/openshift/library-go/pkg/controller/controllercmd"
@@ -11,9 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/rand"
 	clusterapiv1beta1 "open-cluster-management.io/api/cluster/v1beta1"
 	controllers "open-cluster-management.io/placement/pkg/controllers"
-	"open-cluster-management.io/placement/pkg/controllers/scheduling"
 	"open-cluster-management.io/placement/test/integration/util"
-	"time"
 )
 
 var _ = ginkgo.Describe("Prioritizers", func() {
@@ -43,7 +42,6 @@ var _ = ginkgo.Describe("Prioritizers", func() {
 		// start controller manager
 		var ctx context.Context
 		ctx, cancel = context.WithCancel(context.Background())
-		scheduling.ResyncInterval = time.Second * 5
 		go controllers.RunControllerManager(ctx, &controllercmd.ControllerContext{
 			KubeConfig:    restConfig,
 			EventRecorder: util.NewIntegrationTestEventRecorder("integration"),
@@ -297,7 +295,7 @@ var _ = ginkgo.Describe("Prioritizers", func() {
 				},
 			}
 
-			//Creating the clusters with resources
+			//Creating the clusters with scores
 			assertBindingClusterSet(clusterSet1Name, namespace)
 			clusterNames := assertCreatingClusters(clusterSet1Name, 3)
 			assertCreatingAddOnPlacementScores(clusterNames[0], "demo", "demo", 80)
@@ -309,7 +307,7 @@ var _ = ginkgo.Describe("Prioritizers", func() {
 			assertClusterNamesOfDecisions(placementName, namespace, []string{clusterNames[1], clusterNames[2]})
 		})
 
-		ginkgo.It("Should reschedule every ResyncInterval and update desicion when AddOnPlacementScore changes", func() {
+		ginkgo.It("Should update desicion when AddOnPlacementScore changes", func() {
 			// placement settings
 			prioritizerPolicy := clusterapiv1beta1.PrioritizerPolicy{
 				Mode: clusterapiv1beta1.PrioritizerPolicyModeExact,
@@ -337,7 +335,7 @@ var _ = ginkgo.Describe("Prioritizers", func() {
 			//Checking the result of the placement when no AddOnPlacementScores
 			assertClusterNamesOfDecisions(placementName, namespace, []string{clusterNames[0], clusterNames[1]})
 
-			//Creating the AddOnPlacementScores
+			//Add the AddOnPlacementScores
 			assertCreatingAddOnPlacementScores(clusterNames[0], "demo", "demo", 80)
 			assertCreatingAddOnPlacementScores(clusterNames[1], "demo", "demo", 90)
 			assertCreatingAddOnPlacementScores(clusterNames[2], "demo", "demo", 100)
@@ -353,6 +351,11 @@ var _ = ginkgo.Describe("Prioritizers", func() {
 			//Checking the result of the placement when AddOnPlacementScores updated
 			assertClusterNamesOfDecisions(placementName, namespace, []string{clusterNames[0], clusterNames[2]})
 
+			//Delete the AddOnPlacementScores
+			assertDeletingAddOnPlacementScores(clusterNames[0], "demo")
+
+			//Checking the result of the placement when AddOnPlacementScores updated
+			assertClusterNamesOfDecisions(placementName, namespace, []string{clusterNames[1], clusterNames[2]})
 		})
 	})
 })

@@ -1,6 +1,10 @@
 package scheduling
 
 import (
+	"strings"
+	"testing"
+	"time"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -14,9 +18,6 @@ import (
 	clusterapiv1beta1 "open-cluster-management.io/api/cluster/v1beta1"
 	clusterapiv1beta2 "open-cluster-management.io/api/cluster/v1beta2"
 	testinghelpers "open-cluster-management.io/placement/pkg/helpers/testing"
-	"strings"
-	"testing"
-	"time"
 )
 
 func newClusterInformerFactory(clusterClient clusterclient.Interface, objects ...runtime.Object) clusterinformers.SharedInformerFactory {
@@ -83,35 +84,6 @@ func TestEnqueuePlacementsByClusterSet(t *testing.T) {
 		{
 			name:       "invalid object type",
 			clusterSet: "invalid object type",
-		},
-		{
-			name:       "clusterset selector type is LegacyClusterSetLabel",
-			clusterSet: testinghelpers.NewClusterSet("clusterset1").Build(),
-			initObjs: []runtime.Object{
-				testinghelpers.NewClusterSetBinding("ns1", "clusterset1"),
-				testinghelpers.NewPlacement("ns1", "placement1").Build(),
-			},
-			queuedKeys: []string{
-				"ns1/placement1",
-			},
-		},
-		{
-			name: "clusterset selector type is LabelSelector",
-			clusterSet: testinghelpers.NewClusterSet("clusterset1").WithClusterSelector(clusterapiv1beta2.ManagedClusterSelector{
-				SelectorType: clusterapiv1beta2.LabelSelector,
-				LabelSelector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{
-						"cloud": "Amazon",
-					},
-				},
-			}).Build(),
-			initObjs: []runtime.Object{
-				testinghelpers.NewClusterSetBinding("ns1", "clusterset1"),
-				testinghelpers.NewPlacement("ns1", "placement1").Build(),
-			},
-			queuedKeys: []string{
-				"ns1/placement1",
-			},
 		},
 		{
 			name:       "clusterset selector type is LegacyClusterSetLabel",

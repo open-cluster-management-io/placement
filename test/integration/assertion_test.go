@@ -3,6 +3,9 @@ package integration
 import (
 	"context"
 	"fmt"
+	"sort"
+	"time"
+
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -15,8 +18,6 @@ import (
 	clusterapiv1beta1 "open-cluster-management.io/api/cluster/v1beta1"
 	clusterapiv1beta2 "open-cluster-management.io/api/cluster/v1beta2"
 	"open-cluster-management.io/placement/test/integration/util"
-	"sort"
-	"time"
 )
 
 func assertPlacementDecisionCreated(placement *clusterapiv1beta1.Placement) {
@@ -452,5 +453,15 @@ func assertCreatingAddOnPlacementScores(clusternamespace, crname, scorename stri
 	}
 
 	_, err = clusterClient.ClusterV1alpha1().AddOnPlacementScores(clusternamespace).UpdateStatus(context.Background(), addOn, metav1.UpdateOptions{})
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+}
+
+func assertDeletingAddOnPlacementScores(clusternamespace, crname string) {
+	ginkgo.By(fmt.Sprintf("Delete namespace %s for addonplacementscores %s", clusternamespace, crname))
+	err := kubeClient.CoreV1().Namespaces().Delete(context.Background(), clusternamespace, metav1.DeleteOptions{})
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+	ginkgo.By(fmt.Sprintf("Delete addonplacementscores %s in %s", crname, clusternamespace))
+	err = clusterClient.ClusterV1alpha1().AddOnPlacementScores(clusternamespace).Delete(context.Background(), crname, metav1.DeleteOptions{})
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 }
