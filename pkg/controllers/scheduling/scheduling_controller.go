@@ -464,6 +464,11 @@ func (c *schedulingController) bind(
 		}
 		decisionSlices = append(decisionSlices, decisionSlice)
 	}
+	// if decisionSlices is empty, append one empty slice.
+	// so that can create a PlacementDecision with empty decisions in status.
+	if len(decisionSlices) == 0 {
+		decisionSlices = append(decisionSlices, []clusterapiv1beta1.ClusterDecision{})
+	}
 
 	// bind cluster decision slices to placementdecisions.
 	errs := []error{}

@@ -97,8 +97,14 @@ var _ = ginkgo.Describe("Placement", func() {
 			// check if the placementdecisions are re-created
 			placement, err := clusterClient.ClusterV1beta1().Placements(namespace).Get(context.Background(), placementName, metav1.GetOptions{})
 			gomega.Expect(err).ToNot(gomega.HaveOccurred())
-			assertPlacementDecisionCreated(placement)
+			assertPlacementDecisionCreated(placement, 1)
 			assertNumberOfDecisions(placementName, namespace, 5)
+		})
+
+		ginkgo.It("Should create empty placementdecision when no cluster selected", func() {
+			placement := assertCreatingPlacement(placementName, namespace, nil, clusterapiv1beta1.PrioritizerPolicy{}, []clusterapiv1beta1.Toleration{})
+			assertPlacementDecisionCreated(placement, 1)
+			assertNumberOfDecisions(placementName, namespace, 0)
 		})
 
 		ginkgo.It("Should create multiple placementdecisions once scheduled", func() {
@@ -266,13 +272,15 @@ var _ = ginkgo.Describe("Placement", func() {
 			assertBindingClusterSet(clusterSet1Name, namespace)
 			assertCreatingClusters(clusterSet1Name, 1)
 
-			assertCreatingPlacement(placementName, namespace, noc(1), clusterapiv1beta1.PrioritizerPolicy{}, []clusterapiv1beta1.Toleration{
+			placement := assertCreatingPlacement(placementName, namespace, noc(1), clusterapiv1beta1.PrioritizerPolicy{}, []clusterapiv1beta1.Toleration{
 				{
 					Key:      "key1",
 					Operator: clusterapiv1beta1.TolerationOpExists,
 					Value:    "value1",
 				},
 			})
+			ginkgo.By("No placementdecision when misconfigured")
+			assertPlacementDecisionCreated(placement, 0)
 			assertPlacementConditionMisconfigured(placementName, namespace, true)
 
 			assertUpdatingPlacement(placementName, namespace, noc(1), clusterapiv1beta1.PrioritizerPolicy{}, []clusterapiv1beta1.Toleration{})
