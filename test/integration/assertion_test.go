@@ -20,7 +20,7 @@ import (
 	"open-cluster-management.io/placement/test/integration/util"
 )
 
-func assertPlacementDecisionCreated(placement *clusterapiv1beta1.Placement, desiredNOPD int) {
+func assertPlacementDecisionCreated(placement *clusterapiv1beta1.Placement) {
 	ginkgo.By("Check if placementdecision is created")
 	gomega.Eventually(func() bool {
 		pdl, err := clusterClient.ClusterV1beta1().PlacementDecisions(placement.Namespace).List(context.Background(), metav1.ListOptions{
@@ -29,7 +29,7 @@ func assertPlacementDecisionCreated(placement *clusterapiv1beta1.Placement, desi
 		if err != nil {
 			return false
 		}
-		if len(pdl.Items) != desiredNOPD {
+		if len(pdl.Items) == 0 {
 			return false
 		}
 		for _, pd := range pdl.Items {
@@ -79,6 +79,7 @@ func assertPlacementDeleted(placementName, namespace string) {
 
 func assertNumberOfDecisions(placementName, namespace string, desiredNOD int) {
 	ginkgo.By("Check the number of decisions in placementdecisions")
+	// at least one decision for each placement
 	desiredNOPD := desiredNOD/maxNumOfClusterDecisions + 1
 	gomega.Eventually(func() bool {
 		pdl, err := clusterClient.ClusterV1beta1().PlacementDecisions(namespace).List(context.Background(), metav1.ListOptions{
@@ -402,7 +403,7 @@ func assertCreatingPlacement(name, namespace string, noc *int32, prioritizerPoli
 
 func assertCreatingPlacementWithDecision(name, namespace string, noc *int32, nod int, prioritizerPolicy clusterapiv1beta1.PrioritizerPolicy, tolerations []clusterapiv1beta1.Toleration) {
 	placement := assertCreatingPlacement(name, namespace, noc, prioritizerPolicy, tolerations)
-	assertPlacementDecisionCreated(placement, nod/maxNumOfClusterDecisions+1)
+	assertPlacementDecisionCreated(placement)
 	assertNumberOfDecisions(name, namespace, nod)
 	if noc != nil {
 		assertPlacementConditionSatisfied(name, namespace, nod, nod == int(*noc))
