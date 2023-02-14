@@ -461,3 +461,13 @@ func assertCreatingAddOnPlacementScores(clusternamespace, crname, scorename stri
 	_, err = clusterClient.ClusterV1alpha1().AddOnPlacementScores(clusternamespace).UpdateStatus(context.Background(), addOn, metav1.UpdateOptions{})
 	gomega.Expect(err).ToNot(gomega.HaveOccurred())
 }
+
+func assertDeletingAddOnPlacementScores(clusternamespace, crname string) {
+	ginkgo.By(fmt.Sprintf("Delete namespace %s for addonplacementscores %s", clusternamespace, crname))
+	err := kubeClient.CoreV1().Namespaces().Delete(context.Background(), clusternamespace, metav1.DeleteOptions{})
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+
+	ginkgo.By(fmt.Sprintf("Delete addonplacementscores %s in %s", crname, clusternamespace))
+	err = clusterClient.ClusterV1alpha1().AddOnPlacementScores(clusternamespace).Delete(context.Background(), crname, metav1.DeleteOptions{})
+	gomega.Expect(err).ToNot(gomega.HaveOccurred())
+}

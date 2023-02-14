@@ -11,15 +11,26 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/rand"
+	clusterapiv1beta1 "open-cluster-management.io/api/cluster/v1beta1"
 )
 
-const (
-	clusterSetLabel   = "cluster.open-cluster-management.io/clusterset"
-	placementLabel    = "cluster.open-cluster-management.io/placement"
-	placementSetLabel = "cluster.open-cluster-management.io/placementset"
-)
+var prioritizerPolicy = &clusterapiv1beta1.PrioritizerPolicy{
+	Mode: clusterapiv1beta1.PrioritizerPolicyModeExact,
+	Configurations: []clusterapiv1beta1.PrioritizerConfig{
+		{
+			ScoreCoordinate: &clusterapiv1beta1.ScoreCoordinate{
+				Type: clusterapiv1beta1.ScoreCoordinateTypeAddOn,
+				AddOn: &clusterapiv1beta1.AddOnScore{
+					ResourceName: "demo",
+					ScoreName:    "demo",
+				},
+			},
+			Weight: 1,
+		},
+	},
+}
 
-var _ = ginkgo.Describe("Placement scalability test", func() {
+var _ = ginkgo.Describe("Placement addon score scalability test", func() {
 	var namespace string
 	var placementSetName string
 	var clusterSetName string
@@ -59,97 +70,42 @@ var _ = ginkgo.Describe("Placement scalability test", func() {
 			LabelSelector: clusterSetLabel + "=" + clusterSetName,
 		})
 
+		ginkgo.By("Delete addonscores and namespaces")
+		scores, _ := clusterClient.ClusterV1alpha1().AddOnPlacementScores("").List(context.Background(), metav1.ListOptions{})
+		for _, s := range scores.Items {
+			err = clusterClient.ClusterV1alpha1().AddOnPlacementScores(s.Namespace).Delete(context.Background(), s.Name, metav1.DeleteOptions{})
+			gomega.Expect(err).ToNot(gomega.HaveOccurred())
+			err = kubeClient.CoreV1().Namespaces().Delete(context.Background(), s.Namespace, metav1.DeleteOptions{})
+			gomega.Expect(err).ToNot(gomega.HaveOccurred())
+		}
+
 		err = kubeClient.CoreV1().Namespaces().Delete(context.Background(), namespace, metav1.DeleteOptions{})
 		gomega.Expect(err).ToNot(gomega.HaveOccurred())
 	})
 
-	/* we create N managedclusters here, and create a placement whose NumberOfClusters is N-1 to ensure the placement logic will
-	 * do comparison to select N-1 managedclusters from N candidates
-	 * N will be 100, 1000, 2000.
-	 */
-
-	ginkgo.It("Should create placement efficiently", func() {
-		totalClusters := 100
-
-		experiment := gmeasure.NewExperiment(fmt.Sprintf("Create 1 placement with %v managedclusters", totalClusters))
-		ginkgo.AddReportEntry(experiment.Name, experiment)
-
-		assertCreatingClusters(totalClusters, clusterSetName)
-
-		experiment.Sample(func(idx int) {
-			experiment.MeasureDuration("runtime", func() {
-				assertCreatingPlacement(noc(totalClusters-1), totalClusters-1, nil, namespace, placementSetName)
-			})
-		}, gmeasure.SamplingConfig{N: 5, Duration: time.Minute})
-
-		//get the median repagination duration from the experiment we just ran
-		repaginationStats := experiment.GetStats("runtime")
-		medianDuration := repaginationStats.DurationFor(gmeasure.StatMedian)
-
-		gomega.Ω(medianDuration.Seconds()).Should(gomega.BeNumerically("<", 5), "Something during creating placement take too long.")
-	})
-
-	ginkgo.It("Should create placement efficiently", func() {
-		totalClusters := 1000
-
-		experiment := gmeasure.NewExperiment(fmt.Sprintf("Create 1 placement with %v managedclusters", totalClusters))
-		ginkgo.AddReportEntry(experiment.Name, experiment)
-
-		assertCreatingClusters(totalClusters, clusterSetName)
-
-		experiment.Sample(func(idx int) {
-			experiment.MeasureDuration("runtime", func() {
-				assertCreatingPlacement(noc(totalClusters-1), totalClusters-1, nil, namespace, placementSetName)
-			})
-		}, gmeasure.SamplingConfig{N: 5, Duration: time.Minute})
-
-		//get the median repagination duration from the experiment we just ran
-		repaginationStats := experiment.GetStats("runtime")
-		medianDuration := repaginationStats.DurationFor(gmeasure.StatMedian)
-
-		gomega.Ω(medianDuration.Seconds()).Should(gomega.BeNumerically("<", 5), "Something during creating placement take too long.")
-	})
-
-	ginkgo.It("Should create placement efficiently", func() {
-		totalClusters := 2000
-
-		experiment := gmeasure.NewExperiment(fmt.Sprintf("Create 1 placement with %v managedclusters", totalClusters))
-		ginkgo.AddReportEntry(experiment.Name, experiment)
-
-		assertCreatingClusters(totalClusters, clusterSetName)
-
-		experiment.Sample(func(idx int) {
-			experiment.MeasureDuration("runtime", func() {
-				assertCreatingPlacement(noc(totalClusters-1), totalClusters-1, nil, namespace, placementSetName)
-			})
-		}, gmeasure.SamplingConfig{N: 5, Duration: time.Minute})
-
-		//get the median repagination duration from the experiment we just ran
-		repaginationStats := experiment.GetStats("runtime")
-		medianDuration := repaginationStats.DurationFor(gmeasure.StatMedian)
-
-		gomega.Ω(medianDuration.Seconds()).Should(gomega.BeNumerically("<", 10), "Something during creating placement take too long.")
-	})
-
-	/* To check the scalability of placement creating/updating, we will
-	 * 1. create N-2 managedclusters, and create M placements whose NumberOfClusters is N-1, then select several placements to ensure each one has N-2 decisions, this is for creating.
-	 * 2. create 2 managedclusters, then select several placements to ensure each one has N-1 decisions, this is for updating.
+	/* To check the scalability of placement addon score updating, we will
+	 * 1. create N managedclusters, and create M placements whose NumberOfClusters is N-1, and create N-1 AddOnPlacementScores with score range 0-99.
+	 * Then select several placements to ensure each one has N-1 decisions, this is for creating.
+	 * 2. create the Nth AddOnPlacementScores for Nth cluster with score 100
+	 * Then check placements to ensure each one has cluster N in decisions, this is for updating.
 	 * M will be 10, 100, 300
 	 * N will be 100
 	 */
 
-	ginkgo.It("Should create/update placement efficiently", func() {
+	ginkgo.It("Should update placement efficiently when addon score changes", func() {
 		totalPlacements := 10
 		totalClusters := 100
 
 		experiment := gmeasure.NewExperiment(fmt.Sprintf("Create %v placement with %v managedclusters", totalPlacements, totalClusters))
 		ginkgo.AddReportEntry(experiment.Name, experiment)
 
-		assertCreatingClusters(totalClusters-2, clusterSetName)
+		clusterNames := assertCreatingClusters(totalClusters, clusterSetName)
+
+		assertCreatingAddOnPlacementScores("demo", "demo", clusterNames[:len(clusterNames)-1])
 
 		experiment.Sample(func(idx int) {
 			experiment.MeasureDuration("createtime", func() {
-				assertCreatingPlacements(totalPlacements, noc(totalClusters-1), totalClusters-2, nil, namespace, placementSetName)
+				assertCreatingPlacements(totalPlacements, noc(totalClusters-1), totalClusters-1, prioritizerPolicy, namespace, placementSetName)
 			})
 		}, gmeasure.SamplingConfig{N: 1, Duration: time.Minute})
 
@@ -158,11 +114,14 @@ var _ = ginkgo.Describe("Placement scalability test", func() {
 		medianDuration := repaginationStats.DurationFor(gmeasure.StatMedian)
 		gomega.Ω(medianDuration.Seconds()).Should(gomega.BeNumerically("<", 50), "Something during creating placement take too long.")
 
-		assertCreatingClusters(2, clusterSetName)
+		//update cluster N-1 and cluster N score as 100
+		ginkgo.By("Update AddOnPlacementScores for 2 clusters")
+		assertCreatingAddOnPlacementScore("demo", "demo", clusterNames[len(clusterNames)-2], 100)
+		assertCreatingAddOnPlacementScore("demo", "demo", clusterNames[len(clusterNames)-1], 100)
 
 		experiment.Sample(func(idx int) {
 			experiment.MeasureDuration("updatetime", func() {
-				assertUpdatingNumberOfDecisions(totalPlacements, totalClusters-1, namespace, placementSetName)
+				assertUpdatingClusterOfDecisions(totalPlacements, clusterNames[len(clusterNames)-1], namespace, placementSetName)
 			})
 		}, gmeasure.SamplingConfig{N: 1, Duration: time.Minute})
 
@@ -172,18 +131,20 @@ var _ = ginkgo.Describe("Placement scalability test", func() {
 		gomega.Ω(medianDuration.Seconds()).Should(gomega.BeNumerically("<", 5), "Something during updating placement take too long.")
 	})
 
-	ginkgo.It("Should create/update placement efficiently", func() {
+	ginkgo.It("Should update placement efficiently when addon score changes", func() {
 		totalPlacements := 100
 		totalClusters := 100
 
 		experiment := gmeasure.NewExperiment(fmt.Sprintf("Create %v placement with %v managedclusters", totalPlacements, totalClusters))
 		ginkgo.AddReportEntry(experiment.Name, experiment)
 
-		assertCreatingClusters(totalClusters-2, clusterSetName)
+		clusterNames := assertCreatingClusters(totalClusters, clusterSetName)
+
+		assertCreatingAddOnPlacementScores("demo", "demo", clusterNames[:len(clusterNames)-1])
 
 		experiment.Sample(func(idx int) {
 			experiment.MeasureDuration("createtime", func() {
-				assertCreatingPlacements(totalPlacements, noc(totalClusters-1), totalClusters-2, nil, namespace, placementSetName)
+				assertCreatingPlacements(totalPlacements, noc(totalClusters-1), totalClusters-1, prioritizerPolicy, namespace, placementSetName)
 			})
 		}, gmeasure.SamplingConfig{N: 1, Duration: time.Minute})
 
@@ -192,11 +153,14 @@ var _ = ginkgo.Describe("Placement scalability test", func() {
 		medianDuration := repaginationStats.DurationFor(gmeasure.StatMedian)
 		gomega.Ω(medianDuration.Seconds()).Should(gomega.BeNumerically("<", 500), "Something during creating placement take too long.")
 
-		assertCreatingClusters(2, clusterSetName)
+		//update cluster N-1 and cluster N score as 100
+		ginkgo.By("Update AddOnPlacementScores for 2 clusters")
+		assertCreatingAddOnPlacementScore("demo", "demo", clusterNames[len(clusterNames)-2], 100)
+		assertCreatingAddOnPlacementScore("demo", "demo", clusterNames[len(clusterNames)-1], 100)
 
 		experiment.Sample(func(idx int) {
 			experiment.MeasureDuration("updatetime", func() {
-				assertUpdatingNumberOfDecisions(totalPlacements, totalClusters-1, namespace, placementSetName)
+				assertUpdatingClusterOfDecisions(totalPlacements, clusterNames[len(clusterNames)-1], namespace, placementSetName)
 			})
 		}, gmeasure.SamplingConfig{N: 1, Duration: time.Minute})
 
@@ -206,18 +170,20 @@ var _ = ginkgo.Describe("Placement scalability test", func() {
 		gomega.Ω(medianDuration.Seconds()).Should(gomega.BeNumerically("<", 40), "Something during updating placement take too long.")
 	})
 
-	ginkgo.It("Should create/update placement efficiently", func() {
+	ginkgo.It("Should update placement efficiently when addon score changes", func() {
 		totalPlacements := 300
 		totalClusters := 100
 
 		experiment := gmeasure.NewExperiment(fmt.Sprintf("Create %v placement with %v managedclusters", totalPlacements, totalClusters))
 		ginkgo.AddReportEntry(experiment.Name, experiment)
 
-		assertCreatingClusters(totalClusters-2, clusterSetName)
+		clusterNames := assertCreatingClusters(totalClusters, clusterSetName)
+
+		assertCreatingAddOnPlacementScores("demo", "demo", clusterNames[:len(clusterNames)-1])
 
 		experiment.Sample(func(idx int) {
 			experiment.MeasureDuration("createtime", func() {
-				assertCreatingPlacements(totalPlacements, noc(totalClusters-1), totalClusters-2, nil, namespace, placementSetName)
+				assertCreatingPlacements(totalPlacements, noc(totalClusters-1), totalClusters-1, prioritizerPolicy, namespace, placementSetName)
 			})
 		}, gmeasure.SamplingConfig{N: 1, Duration: time.Minute})
 
@@ -226,11 +192,14 @@ var _ = ginkgo.Describe("Placement scalability test", func() {
 		medianDuration := repaginationStats.DurationFor(gmeasure.StatMedian)
 		gomega.Ω(medianDuration.Seconds()).Should(gomega.BeNumerically("<", 1500), "Something during creating placement take too long.")
 
-		assertCreatingClusters(2, clusterSetName)
+		//update cluster N-1 and cluster N score as 100
+		ginkgo.By("Update AddOnPlacementScores for 2 clusters")
+		assertCreatingAddOnPlacementScore("demo", "demo", clusterNames[len(clusterNames)-2], 100)
+		assertCreatingAddOnPlacementScore("demo", "demo", clusterNames[len(clusterNames)-1], 100)
 
 		experiment.Sample(func(idx int) {
 			experiment.MeasureDuration("updatetime", func() {
-				assertUpdatingNumberOfDecisions(totalPlacements, totalClusters-1, namespace, placementSetName)
+				assertUpdatingClusterOfDecisions(totalPlacements, clusterNames[len(clusterNames)-1], namespace, placementSetName)
 			})
 		}, gmeasure.SamplingConfig{N: 1, Duration: time.Minute})
 
@@ -240,8 +209,3 @@ var _ = ginkgo.Describe("Placement scalability test", func() {
 		gomega.Ω(medianDuration.Seconds()).Should(gomega.BeNumerically("<", 120), "Something during updating placement take too long.")
 	})
 })
-
-func noc(n int) *int32 {
-	noc := int32(n)
-	return &noc
-}
