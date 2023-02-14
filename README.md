@@ -1,160 +1,277 @@
-# Placement
+# RemoteCR
 
-With `Placement`, you can select a set of `ManagedClusters` from the `ManagedClusterSets` bound to the placement namespace.
-
-## Community, discussion, contribution, and support
-
-Check the [CONTRIBUTING Doc](CONTRIBUTING.md) for how to contribute to the repo.
-
-<!--
-
-You can reach the maintainers of this project at:
-
-- [#xxx on Slack](https://slack.com/signin?redir=%2Fmessages%2Fxxx)
-
--->
 
 ------
+## Description
 
-## Getting Started
+CPD roadmap plan to support the single CPD instance can manage multiple remote workload cross cluster providers, like AWS, OpenShift etc. In the context, CPD need following capabilities:
+- Add/Update/Remove Dataplane from local or remote cluster
+- Set/Update/Remove Quota on Dataplane
+- Set/Update/Remove orgnization quota
+- Distribute workload based on certain scheduler rules
 
-### Prerequisites
+As CPD user OR services, it need following capabilitis:
+- Run the workload based on organization/service instances
+- Run the workload if there is quota (no matter where)
+- Run the workload based on special resource (GPU, TPU, etc)
+- Run the workload based on data locality
+- Run the workload based on remaining resources (spread as much as we can)
+- Avoid run workload on certain cluster (unavailable or special resource)
 
-You have at least one running kubernetes cluster;
+### Solution
 
-### Clone this repo
+CPD scheduler introduce following components for above requirements:
+- Dataplane: Dataplane CR used to define a dataplane resource in any cluster (remote or local).
+- RemoteCR : Work agent is a controller running on the managed cluster. It watches the `RemoteCRs` CRs in a certain namespace on hub cluster and applies the manifests included in those CRs on the managed clusters.
+- PlacementRule: placement rule offer schedule capability for where the workload or resources runs on any dataplane.
 
-```sh
-git clone https://github.com/open-cluster-management-io/placement.git
-cd placement
-```
 
-### Deploy the placement controller
-
-Set environment variables.
-
-```sh
-export KUBECONFIG=</path/to/kubeconfig>
-```
-
-Build the docker image to run the placement controller.
-
-```sh
-go install github.com/openshift/imagebuilder/cmd/imagebuilder@v1.2.1
-make images
-export IMAGE_NAME=<placement_image_name> # export IMAGE_NAME=quay.io/open-cluster-management/placement:latest
-```
-
-If your are using kind, load image into the kind cluster.
-
-```sh
-kind load docker-image <placement_image_name> # kind load docker-image quay.io/open-cluster-management/placement:latest
-```
-
-And then deploy placement manager on the cluster.
-
-```sh
-make deploy-hub
-```
-
-### What is next
-
-After a successful deployment, check on the cluster and see the placement controller has been deployed.
-
-```sh
-kubectl -n open-cluster-management-hub get pods
-NAME                                                  READY   STATUS    RESTARTS   AGE
-cluster-manager-placement-controller-cf9bbd6c-x9dnd   1/1     Running   0          2m16s
-```
-
-Here is an example.
-
-Create a `ManagedClusterSet`.
+### Example: Deployment distribution
+User can create `RemoteCRs` in a namespace, and the workload will be distributed to the managed cluster and then be applied by the work agent.
 
 ```sh
 cat <<EOF | kubectl apply -f -
-apiVersion: cluster.open-cluster-management.io/v1beta2
-kind: ManagedClusterSet
+apiVersion: work.ibm-cpd-mcscheduler.ibm.com/v1
+kind: RemoteCR
 metadata:
-  name: clusterset1
-EOF
-```
-
-Create a `ManagedCluster` and assign it to clusterset `clusterset1`.
-
-```sh
-cat <<EOF | kubectl apply -f -
-apiVersion: cluster.open-cluster-management.io/v1
-kind: ManagedCluster
-metadata:
-  name: cluster1
+  name: hello-work
+  namespace: cluster1
   labels:
-    cluster.open-cluster-management.io/clusterset: clusterset1
-    vendor: OpenShift
+    app: hello
 spec:
-  hubAcceptsClient: true
+  workload:
+    manifests:
+      - apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: hello
+          namespace: default
+        spec:
+          selector:
+            matchLabels:
+              app: hello
+          template:
+            metadata:
+              labels:
+                app: hello
+            spec:
+              containers:
+                - name: hello
+                  image: quay.io/asmacdo/busybox
+                  command: ['sh', '-c', 'echo "Hello, Kubernetes!" && sleep 3600']
 EOF
 ```
 
-Create a `ManagedClusterSetBinding` to bind the `ManagedClusterSet` to the default namespace.
+Validation status of RemoteCR
+
+```yaml
+apiVersion: work.ibm-cpd-mcscheduler.ibm.com/v1
+kind: RemoteCR
+metadata:
+  labels:
+    app: hello
+  name: hello-work
+  namespace: cluster1
+spec:
+  ... ...
+status:
+  conditions:
+    - lastTransitionTime: '2021-06-15T02:26:02Z'
+      message: Apply manifest work complete
+      reason: AppliedRemoteCRComplete
+      status: 'True'
+      type: Applied
+    - lastTransitionTime: '2021-06-15T02:26:02Z'
+      message: All resources are available
+      reason: ResourcesAvailable
+      status: 'True'
+      type: Available
+  resourceStatus:
+    manifests:
+      - conditions:
+          - lastTransitionTime: '2021-06-15T02:26:02Z'
+            message: Apply manifest complete
+            reason: AppliedManifestComplete
+            status: 'True'
+            type: Applied
+          - lastTransitionTime: '2021-06-15T02:26:02Z'
+            message: Resource is available
+            reason: ResourceAvailable
+            status: 'True'
+            type: Available
+        resourceMeta:
+          group: apps
+          kind: Deployment
+          name: hello
+          namespace: default
+          ordinal: 0
+          resource: deployments
+          version: v1
+```
+
+As shown above, the status of the `RemoteCR` includes the conditions for both the whole `RemoteCR` and each of the manifest it contains. And there are two condition types:
+- **Applied**. If true, it indicates the whole `RemoteCR` (or a particular manifest) has been applied on the managed cluster; otherwise `reason`/`message` of the condition will show more information for troubleshooting.
+- **Available**. If true, it indicates the corresponding Kubernetes resources of the  whole `RemoteCR` (or a particular manifest) are available on the managed cluster; otherwise `reason`/`message` of the condition will show more information for troubleshooting
+
+Check on the managed cluster and see the `Pod` has been deployed from the hub cluster.
+```
+oc get pod
+NAME                     READY   STATUS    RESTARTS   AGE
+hello-64dd6fd586-rfrkf   1/1     Running   0          108s
+```
+
+### Example: Quota distribution
+
+Quota can be distribute through the RemoteCR from the hub cluster. Following example use ResourceMatch to control the remote cluster workload quota based on pod label. 
+User can realtime update the quota in the hub node, RemoteCR would sync the new quota into remote the cluster.
 
 ```sh
 cat <<EOF | kubectl apply -f -
-apiVersion: cluster.open-cluster-management.io/v1beta2
-kind: ManagedClusterSetBinding
+apiVersion: work.ibm-cpd-mcscheduler.ibm.com/v1
+kind: RemoteCR
 metadata:
-  name: clusterset1
-  namespace: default
+  name: hello-work
+  namespace: cluster1
+  labels:
+    app: hello
 spec:
-  clusterSet: clusterset1
+  workload:
+    manifests:
+      - apiVersion: ibm.com/v1    
+        kind: ResourceMatch
+        metadata:
+          name: rm-1
+          namespace: default
+        spec:
+          matchLabels:
+            resource.cloud.ibm.com/product: product-a
+          matchExpressions:
+            - {key: resource.cloud.ibm.com/user, operator: In, values: [user-a, user-b]}
+          runPodQuotas:
+            disabled: false
+            requests:
+              cpu: 4
+              memory: 10Gi
+              nvidia.com/gpu: 6
+            limits:
+              cpu: 4
+              memory: 20Gi
+              nvidia.com/gpu: 6
 EOF
 ```
 
-Now create a `Placement`:
+### Example: Quota distribution with PlacementRule
+In the case user only want to updated the quota in certain group of dataplane. PlacementRule can be used to define the rules
 
 ```sh
 cat <<EOF | kubectl apply -f -
-apiVersion: cluster.open-cluster-management.io/v1beta1
-kind: Placement
+apiVersion: work.ibm-cpd-mcscheduler.ibm.com/v1
+kind: RemoteCR
 metadata:
-  name: placement1
+  name: hello-work
+  namespace: cluster1
+  labels:
+    app: hello
+spec:
+  workload:
+    placementRef: rule-orgnization-A
+    manifests:
+      - apiVersion: ibm.com/v1    
+        kind: ResourceMatch
+        metadata:
+          name: rm-1
+          namespace: default
+        spec:
+          matchLabels:
+            resource.cloud.ibm.com/product: product-a
+          matchExpressions:
+            - {key: resource.cloud.ibm.com/user, operator: In, values: [user-a, user-b]}
+          runPodQuotas:
+            disabled: false
+            requests:
+              cpu: 4
+              memory: 10Gi
+              nvidia.com/gpu: 6
+            limits:
+              cpu: 4
+              memory: 20Gi
+              nvidia.com/gpu: 6
+EOF
+```
+
+```sh
+cat <<EOF | kubectl apply -f -
+apiVersion: cluster.ibm-cpd-mcscheduler.ibm.com/v1beta1
+kind: PlacementRule
+metadata:
+  name: rule-orgnization-A
   namespace: default
 spec:
   predicates:
     - requiredClusterSelector:
         labelSelector:
           matchLabels:
-            vendor: OpenShift
+            cluster.ibm-cpd-mcscheduler.ibm.com/dataplaneset: orgnization-A
 EOF
 ```
 
-Check the `PlacementDecision` created for this placement. It contains all selected clusters in status.
+### Deploy
 
-```txt
-kubectl get placementdecisions
-NAME                    AGE
-placement1-decision-1   2m27s
+#### Deploy on one single cluster
+Set environment variables.
 
-kubectl describe placementdecisions placement1-decision-1
-......
-Status:
-  Decisions:
-    Cluster Name:  cluster1
-    Reason:
-Events:            <none>
+```sh
+export KUBECONFIG=</path/to/kubeconfig>
+```
+
+Override the docker image (optional)
+```sh
+export IMAGE_NAME=<your_own_image_name> # export IMAGE_NAME=quay.io/ibm-cpd-mcscheduler.ibm.com/work:latest
+```
+
+And then deploy work webhook and work agent
+```
+make deploy
+```
+
+#### Deploy on two clusters
+
+Set environment variables.
+
+- Hub and managed cluster share a kubeconfig file
+    ```sh
+    export KUBECONFIG=</path/to/kubeconfig>
+    export HUB_KUBECONFIG_CONTEXT=<hub-context-name>
+    export SPOKE_KUBECONFIG_CONTEXT=<spoke-context-name>
+    ```
+- Hub and managed cluster use different kubeconfig files.
+    ```sh
+    export HUB_KUBECONFIG=</path/to/hub_cluster/kubeconfig>
+    export SPOKE_KUBECONFIG=</path/to/managed_cluster/kubeconfig>
+    ```
+
+Set cluster ip if you are deploying on KIND clusters.
+```sh
+export CLUSTER_IP=<host_name/ip_address>:<port> # export CLUSTER_IP=hub-control-plane:6443
+```
+You can get the above information with command below.
+```sh
+kubectl --kubeconfig </path/to/hub_cluster/kubeconfig> -n kube-public get configmap cluster-info -o yaml
+```
+
+Override the docker image (optional)
+```sh
+export IMAGE_NAME=<your_own_image_name> # export IMAGE_NAME=quay.io/ibm-cpd-mcscheduler.ibm.com/work:latest
+```
+
+And then deploy work webhook and work agent
+```
+make deploy
 ```
 
 ### Clean up
-
-Undeploy placement controller from the cluster.
-
-```sh
-make undeploy-hub
+To clean the environment
+```
+make undeploy
 ```
 
-<!--
-## XXX References
-
-If you have any further question about xxx, please refer to
-[XXX help documentation](docs/xxx_help.md) for further information.
--->
