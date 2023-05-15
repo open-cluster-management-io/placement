@@ -3,6 +3,7 @@ package scheduling
 import (
 	"context"
 	"fmt"
+	"k8s.io/utils/clock"
 	"reflect"
 	"sort"
 	"strings"
@@ -63,6 +64,7 @@ type schedulingController struct {
 	placementDecisionLister clusterlisterv1beta1.PlacementDecisionLister
 	scheduler               Scheduler
 	recorder                kevents.EventRecorder
+	metrics                 *scheduleMetrics
 }
 
 // NewSchedulingController return an instance of schedulingController
@@ -91,6 +93,7 @@ func NewSchedulingController(
 		placementDecisionLister: placementDecisionInformer.Lister(),
 		recorder:                krecorder,
 		scheduler:               scheduler,
+		metrics:                 newScheduleMetrics(clock.RealClock{}),
 	}
 
 	// setup event handler for cluster informer.
@@ -192,7 +195,7 @@ func (c *schedulingController) sync(ctx context.Context, syncCtx factory.SyncCon
 		return err
 	}
 
-	return c.syncPlacement(ctx, syncCtx, placement)
+	return c.syncPlacement(ctx, syncCtx, queueKey, placement)
 }
 
 func (c *schedulingController) getPlacement(queueKey string) (*clusterapiv1beta1.Placement, error) {
@@ -211,7 +214,7 @@ func (c *schedulingController) getPlacement(queueKey string) (*clusterapiv1beta1
 	return placement, nil
 }
 
-func (c *schedulingController) syncPlacement(ctx context.Context, syncCtx factory.SyncContext, placement *clusterapiv1beta1.Placement) error {
+func (c *schedulingController) syncPlacement(ctx context.Context, syncCtx factory.SyncContext, queueKey string, placement *clusterapiv1beta1.Placement) error {
 	// no work if placement is deleting
 	if !placement.DeletionTimestamp.IsZero() {
 		return nil
@@ -238,6 +241,7 @@ func (c *schedulingController) syncPlacement(ctx context.Context, syncCtx factor
 	}
 
 	// schedule placement with scheduler
+	c.metrics.startSchedule(queueKey)
 	scheduleResult, status := c.scheduler.Schedule(ctx, placement, clusters)
 	misconfiguredCondition := newMisconfiguredCondition(status)
 	satisfiedCondition := newSatisfiedCondition(
@@ -258,6 +262,8 @@ func (c *schedulingController) syncPlacement(ctx context.Context, syncCtx factor
 		syncCtx.Queue().AddAfter(key, *t)
 	}
 
+	c.metrics.startBind(queueKey)
+	defer c.metrics.done(queueKey)
 	if err := c.bind(ctx, placement, scheduleResult.Decisions(), scheduleResult.PrioritizerScores(), status); err != nil {
 		return err
 	}
